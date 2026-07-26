@@ -35,9 +35,11 @@ services:
     volumes:
       - proxystream-data:/data
 
-    # Transcoding is the only real load; leave the box some headroom.
-    cpus: "6.0"
-    mem_limit: 2g
+    # 4 is the core count of a Raspberry Pi 3 and 4, the smallest boards this
+    # project supports, so the limit never exceeds the host and the container
+    # always starts. Docker refuses a value above the available cores, so lower
+    # this on anything smaller. No mem_limit: a Pi 3 only has 1 GB.
+    cpus: "4.0"
 
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8080/health"]

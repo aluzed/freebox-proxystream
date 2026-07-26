@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/apenombre/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/db"
 	ptn "github.com/middelink/go-parse-torrent-name"
 )
 

@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/config"
 )
 
 const stderrRingSize = 50

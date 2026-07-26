@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/apenombre/freebox-proxystream/internal/testftp"
+	"github.com/aluzed/freebox-proxystream/internal/testftp"
 )
 
 func startTestFTP(t *testing.T) (addr, root string) {

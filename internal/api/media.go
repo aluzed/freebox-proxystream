@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/apenombre/freebox-proxystream/internal/config"
-	"github.com/apenombre/freebox-proxystream/internal/db"
-	"github.com/apenombre/freebox-proxystream/internal/transcode"
+	"github.com/aluzed/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/transcode"
 )
 
 // mediaView is the detail payload: everything the player needs in one call.

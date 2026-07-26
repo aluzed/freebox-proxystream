@@ -6,8 +6,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/apenombre/freebox-proxystream/internal/db"
-	"github.com/apenombre/freebox-proxystream/internal/ftpclient"
+	"github.com/aluzed/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/ftpclient"
 )
 
 type Source struct {

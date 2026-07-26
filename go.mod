@@ -1,4 +1,4 @@
-module github.com/apenombre/freebox-proxystream
+module github.com/aluzed/freebox-proxystream
 
 go 1.26
 

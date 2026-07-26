@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/db"
-	"github.com/apenombre/freebox-proxystream/internal/ftpclient"
-	"github.com/apenombre/freebox-proxystream/internal/mediasource"
-	"github.com/apenombre/freebox-proxystream/internal/rangeproxy"
-	"github.com/apenombre/freebox-proxystream/internal/testftp"
+	"github.com/aluzed/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/ftpclient"
+	"github.com/aluzed/freebox-proxystream/internal/mediasource"
+	"github.com/aluzed/freebox-proxystream/internal/rangeproxy"
+	"github.com/aluzed/freebox-proxystream/internal/testftp"
 )
 
 // End to end: HTTP Range request -> FTP REST/RETR -> bytes, with no local copy.

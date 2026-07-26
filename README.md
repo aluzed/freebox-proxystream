@@ -156,7 +156,7 @@ seeking to 1h20 of a 60 GB remux fetches only that region.
 ### Docker (Proxmox LXC, or anywhere)
 
 ```bash
-git clone https://github.com/apenombre/freebox-proxystream.git
+git clone https://github.com/aluzed/freebox-proxystream.git
 cd freebox-proxystream
 cp .env.example .env
 $EDITOR .env          # FTP_HOST, FTP_USER, FTP_PASS

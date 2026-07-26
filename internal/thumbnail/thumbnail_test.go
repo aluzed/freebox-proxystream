@@ -13,14 +13,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/config"
-	"github.com/apenombre/freebox-proxystream/internal/db"
-	"github.com/apenombre/freebox-proxystream/internal/ftpclient"
-	"github.com/apenombre/freebox-proxystream/internal/mediasource"
-	"github.com/apenombre/freebox-proxystream/internal/probe"
-	"github.com/apenombre/freebox-proxystream/internal/rangeproxy"
-	"github.com/apenombre/freebox-proxystream/internal/testftp"
-	"github.com/apenombre/freebox-proxystream/internal/thumbnail"
+	"github.com/aluzed/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/ftpclient"
+	"github.com/aluzed/freebox-proxystream/internal/mediasource"
+	"github.com/aluzed/freebox-proxystream/internal/probe"
+	"github.com/aluzed/freebox-proxystream/internal/rangeproxy"
+	"github.com/aluzed/freebox-proxystream/internal/testftp"
+	"github.com/aluzed/freebox-proxystream/internal/thumbnail"
 )
 
 // setup serves a clip over FTP through the range proxy, exactly as production

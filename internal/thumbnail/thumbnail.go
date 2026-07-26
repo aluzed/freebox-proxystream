@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/config"
-	"github.com/apenombre/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/db"
 )
 
 // A frame from a remote file costs one seek plus one decode, so allow well

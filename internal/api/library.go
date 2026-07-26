@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/apenombre/freebox-proxystream/internal/db"
-	"github.com/apenombre/freebox-proxystream/internal/ftpclient"
+	"github.com/aluzed/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/ftpclient"
 )
 
 func decodeJSON(r *http.Request, v any) error {

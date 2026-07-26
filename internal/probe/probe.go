@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/db"
 )
 
 const Timeout = 60 * time.Second

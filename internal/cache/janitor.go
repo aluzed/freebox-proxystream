@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/config"
-	"github.com/apenombre/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/db"
 )
 
 // ActiveSet reports which media currently have a running encoder, so their

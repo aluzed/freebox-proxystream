@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/apenombre/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/db"
 )
 
 func TestUnknownEncoderIsRejectedWithTheOptions(t *testing.T) {

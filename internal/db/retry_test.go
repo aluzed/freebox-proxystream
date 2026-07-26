@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/db"
 )
 
 func newMedia(t *testing.T, store *db.Store, path string) int64 {

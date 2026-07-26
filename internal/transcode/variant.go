@@ -5,8 +5,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/apenombre/freebox-proxystream/internal/config"
-	"github.com/apenombre/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/db"
 )
 
 // Variant is a fully resolved output configuration: the thing a cache

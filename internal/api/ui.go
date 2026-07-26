@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/db"
-	"github.com/apenombre/freebox-proxystream/internal/scanner"
-	"github.com/apenombre/freebox-proxystream/internal/web"
+	"github.com/aluzed/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/scanner"
+	"github.com/aluzed/freebox-proxystream/internal/web"
 )
 
 // render writes a full page, adding the context every layout needs.

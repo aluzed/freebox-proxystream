@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/apenombre/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/config"
 )
 
 // Encoder describes how to drive one H.264 encoder. They differ in more than

@@ -16,16 +16,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/api"
-	"github.com/apenombre/freebox-proxystream/internal/cache"
-	"github.com/apenombre/freebox-proxystream/internal/config"
-	"github.com/apenombre/freebox-proxystream/internal/db"
-	"github.com/apenombre/freebox-proxystream/internal/ftpclient"
-	"github.com/apenombre/freebox-proxystream/internal/scanner"
-	"github.com/apenombre/freebox-proxystream/internal/subs"
-	"github.com/apenombre/freebox-proxystream/internal/testftp"
-	"github.com/apenombre/freebox-proxystream/internal/thumbnail"
-	"github.com/apenombre/freebox-proxystream/internal/transcode"
+	"github.com/aluzed/freebox-proxystream/internal/api"
+	"github.com/aluzed/freebox-proxystream/internal/cache"
+	"github.com/aluzed/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/ftpclient"
+	"github.com/aluzed/freebox-proxystream/internal/scanner"
+	"github.com/aluzed/freebox-proxystream/internal/subs"
+	"github.com/aluzed/freebox-proxystream/internal/testftp"
+	"github.com/aluzed/freebox-proxystream/internal/thumbnail"
+	"github.com/aluzed/freebox-proxystream/internal/transcode"
 )
 
 type testEnv struct {

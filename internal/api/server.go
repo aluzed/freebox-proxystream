@@ -4,15 +4,15 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/apenombre/freebox-proxystream/internal/cache"
-	"github.com/apenombre/freebox-proxystream/internal/config"
-	"github.com/apenombre/freebox-proxystream/internal/db"
-	"github.com/apenombre/freebox-proxystream/internal/ftpclient"
-	"github.com/apenombre/freebox-proxystream/internal/scanner"
-	"github.com/apenombre/freebox-proxystream/internal/subs"
-	"github.com/apenombre/freebox-proxystream/internal/thumbnail"
-	"github.com/apenombre/freebox-proxystream/internal/transcode"
-	"github.com/apenombre/freebox-proxystream/internal/web"
+	"github.com/aluzed/freebox-proxystream/internal/cache"
+	"github.com/aluzed/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/ftpclient"
+	"github.com/aluzed/freebox-proxystream/internal/scanner"
+	"github.com/aluzed/freebox-proxystream/internal/subs"
+	"github.com/aluzed/freebox-proxystream/internal/thumbnail"
+	"github.com/aluzed/freebox-proxystream/internal/transcode"
+	"github.com/aluzed/freebox-proxystream/internal/web"
 )
 
 type Server struct {

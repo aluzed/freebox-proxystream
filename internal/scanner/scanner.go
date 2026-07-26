@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/apenombre/freebox-proxystream/internal/config"
-	"github.com/apenombre/freebox-proxystream/internal/db"
-	"github.com/apenombre/freebox-proxystream/internal/ftpclient"
-	"github.com/apenombre/freebox-proxystream/internal/probe"
-	"github.com/apenombre/freebox-proxystream/internal/thumbnail"
+	"github.com/aluzed/freebox-proxystream/internal/config"
+	"github.com/aluzed/freebox-proxystream/internal/db"
+	"github.com/aluzed/freebox-proxystream/internal/ftpclient"
+	"github.com/aluzed/freebox-proxystream/internal/probe"
+	"github.com/aluzed/freebox-proxystream/internal/thumbnail"
 )
 
 const (
