@@ -1,0 +1,57 @@
+{{define "content"}}
+<div class="stack">
+  <div class="page-head"><h1>Réglages</h1></div>
+  <div id="settings-body" class="stack">
+  {{template "settings_nav.html" "libraries"}}
+
+  <section class="panel stack">
+    <h2>Bibliothèques</h2>
+    <p class="muted">
+      Un dossier du FTP, analysé récursivement jusqu'à 6 niveaux de
+      profondeur. L'heure de dernière analyse se met à jour toute seule.
+    </p>
+    <div id="libraries" hx-get="/ui/libraries"
+         hx-trigger="load, libraries-changed from:body, every 15s">
+      <p class="muted">Chargement…</p>
+    </div>
+  </section>
+
+  <section class="panel stack">
+    <h2>Ajouter une bibliothèque</h2>
+    <p class="muted">Parcourez le FTP de la Freebox et choisissez un dossier.</p>
+
+    <div id="browse" hx-get="/ui/browse" hx-trigger="load">
+      <p class="muted">Connexion au FTP…</p>
+    </div>
+
+    <form class="stack" hx-post="/ui/libraries" hx-target="#library-form-result" hx-swap="innerHTML">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Chemin FTP</span>
+          <input type="text" name="ftp_path" id="ftp-path-input" required
+                 placeholder="/Disque dur/Films" readonly>
+        </label>
+        <label class="field">
+          <span class="field-label">Nom</span>
+          <input type="text" name="name" required placeholder="Films">
+        </label>
+        <label class="field">
+          <span class="field-label">Type</span>
+          <select name="kind">
+            <option value="movie">Films</option>
+            <option value="tv">Séries</option>
+          </select>
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary w-full-mobile" title="Créer la bibliothèque">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          <span>Créer la bibliothèque</span>
+        </button>
+      </div>
+      <div id="library-form-result"></div>
+    </form>
+  </section>
+  </div>
+</div>
+{{end}}

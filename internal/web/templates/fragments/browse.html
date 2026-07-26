@@ -1,0 +1,50 @@
+{{define "browse.html"}}
+{{/* The id has to live on the fragment root: each navigation swaps this whole
+     element with outerHTML, so dropping the id would leave the next click with
+     no hx-target and browsing would silently stop after one level. */}}
+<div id="browse" class="browser">
+  <div class="browser-head">
+    <code class="browser-path">{{.Path}}</code>
+    {{if ne .Path "/"}}
+    <button type="button" class="btn btn-outline btn-sm" title="Dossier parent"
+            hx-get="/ui/browse?path={{parentDir .Path | urlquery}}" hx-target="#browse" hx-swap="outerHTML">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+      <span>Dossier parent</span>
+    </button>
+    {{end}}
+  </div>
+
+  {{if .Error}}
+    <div class="alert alert-error">Impossible de lister le FTP : {{.Error}}</div>
+  {{else}}
+    <ul class="browser-list">
+      {{range .Entries}}
+        {{if .IsDir}}
+        <li class="browser-item">
+          <button type="button" class="browser-entry" title="Ouvrir {{.Name}}"
+                  hx-get="/ui/browse?path={{.Path | urlquery}}" hx-target="#browse" hx-swap="outerHTML">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+            <span>{{.Name}}</span>
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" title="Choisir ce dossier"
+                  onclick="selectFtpPath('{{.Path}}')">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg>
+            <span>Choisir</span>
+          </button>
+        </li>
+        {{else}}
+        <li class="browser-item is-file">
+          <span class="browser-entry is-static">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            <span>{{.Name}}</span>
+          </span>
+          <span class="muted browser-size">{{bytes .Size}}</span>
+        </li>
+        {{end}}
+      {{else}}
+        <li class="muted browser-empty">Dossier vide.</li>
+      {{end}}
+    </ul>
+  {{end}}
+</div>
+{{end}}

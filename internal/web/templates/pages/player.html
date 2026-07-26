@@ -1,0 +1,32 @@
+{{define "content"}}
+{{$m := .Media}}
+<div class="stack player-page">
+  <div class="backlink">
+    <a href="/media/{{$m.ID}}" class="btn btn-outline w-full-mobile" title="Retour à la fiche">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      <span>Retour</span>
+    </a>
+  </div>
+
+  <h1 class="player-title">{{$m.DisplayTitle}}</h1>
+
+  <div class="player-shell">
+    <video id="player" controls playsinline autoplay
+           poster="/api/media/{{$m.ID}}/poster"></video>
+  </div>
+
+  <p id="player-status" class="muted" role="status"></p>
+
+  <p class="muted player-hint">
+    Espace : lecture/pause · ← → : 10 s · F : plein écran · M : muet
+  </p>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script src="{{asset "hls.min.js"}}"></script>
+<script id="player-config" type="application/json">
+{{.PlayerConfig}}
+</script>
+<script src="{{asset "player.js"}}" defer></script>
+{{end}}

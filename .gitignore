@@ -1,0 +1,32 @@
+# Secrets and local state. Ignore every .env variant, then re-admit the
+# committed template, so a stray .env.bak or .env.prod can never be added.
+.env*
+!.env.example
+
+# Everything the running service writes: database, segments, thumbnails, subs.
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Build output
+/proxystream
+/dist/
+/out/
+*.test
+*.out
+coverage.*
+
+# Tooling. settings.json is shared on purpose; settings.local.json is personal
+# and would otherwise be committed by anyone whose global config does not
+# already ignore it.
+.claude/settings.local.json
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~

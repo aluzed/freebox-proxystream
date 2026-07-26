@@ -1,0 +1,54 @@
+{{define "content"}}
+<div class="stack">
+  <div class="page-head"><h1>Réglages</h1></div>
+  <div id="settings-body" class="stack">
+  {{template "settings_nav.html" "account"}}
+
+  <section class="panel stack">
+    <h2>Compte</h2>
+    <dl class="deflist">
+      <dt>Identifiant</dt><dd>{{.User.Username}}</dd>
+      <dt>Créé le</dt><dd>{{.User.CreatedAt.Local.Format "02/01/2006 à 15:04"}}</dd>
+      <dt>Mot de passe modifié</dt><dd>{{.User.UpdatedAt.Local.Format "02/01/2006 à 15:04"}}</dd>
+    </dl>
+    <p class="muted">
+      Les identifiants sont stockés hachés (bcrypt) dans la base SQLite, jamais
+      dans un fichier de configuration. En ligne de commande :
+      <code>proxystream users</code> pour les lister,
+      <code>proxystream passwd</code> pour changer le mot de passe.
+    </p>
+  </section>
+
+  <section class="panel stack">
+    <h2>Changer de mot de passe</h2>
+    <form class="stack" hx-post="/ui/password" hx-target="#password-result" hx-swap="innerHTML">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Mot de passe actuel</span>
+          <input type="password" name="current_password" required autocomplete="current-password">
+        </label>
+        <label class="field">
+          <span class="field-label">Nouveau mot de passe</span>
+          <input type="password" name="new_password" required minlength="8" autocomplete="new-password">
+        </label>
+        <label class="field">
+          <span class="field-label">Confirmer le nouveau mot de passe</span>
+          <input type="password" name="confirm_password" required minlength="8" autocomplete="new-password">
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary w-full-mobile" title="Changer le mot de passe">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Changer le mot de passe</span>
+        </button>
+      </div>
+      <p class="muted">
+        Au moins 8 caractères. Toutes les sessions seront déconnectées, y compris
+        celle-ci : vous devrez vous reconnecter.
+      </p>
+      <div id="password-result"></div>
+    </form>
+  </section>
+  </div>
+</div>
+{{end}}

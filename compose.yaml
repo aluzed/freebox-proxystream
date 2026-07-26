@@ -1,0 +1,50 @@
+services:
+  proxystream:
+    build: .
+    # Or use a published image instead of building locally:
+    # image: ghcr.io/apenombre/freebox-proxystream:latest
+    container_name: proxystream
+    restart: unless-stopped
+
+    # The service trusts its network and speaks plain HTTP. Publish it on the
+    # Tailscale interface, or on localhost behind a reverse proxy. Binding it
+    # to 0.0.0.0 exposes an unencrypted login to your whole LAN.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    env_file:
+      - .env
+
+    # env_file wins over the image's ENV, so a .env written for running the
+    # binary locally (DB_PATH=./data/...) would quietly move every bit of state
+    # off the volume and into the container's writable layer, to be lost on the
+    # next rebuild. These pin the container paths regardless of what .env says.
+    #
+    # Accounts are not configured here at all: they live in the database, so
+    # there is no secret in this file and nothing for Compose to mangle.
+    environment:
+      DB_PATH: /data/app.db
+      CACHE_DIR: /data/segments
+      SUBTITLE_DIR: /data/subs
+      THUMB_DIR: /data/thumbs
+      # Must bind to all interfaces *inside* the container; the ports mapping
+      # above is what actually limits exposure on the host.
+      HTTP_ADDR: 0.0.0.0:8080
+      INTERNAL_ADDR: 127.0.0.1:8081
+
+    volumes:
+      - proxystream-data:/data
+
+    # Transcoding is the only real load; leave the box some headroom.
+    cpus: "6.0"
+    mem_limit: 2g
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  proxystream-data:

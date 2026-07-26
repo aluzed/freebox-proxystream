@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="stack">
+  <div class="page-head">
+    <h1>Bibliothèque</h1>
+    <a href="/settings/libraries" class="btn btn-outline w-full-mobile" title="Gérer les bibliothèques">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+      <span>Gérer les bibliothèques</span>
+    </a>
+  </div>
+
+  <form class="filters" onsubmit="return false">
+    <label class="field">
+      <span class="field-label">Rechercher</span>
+      <input type="search" name="q" placeholder="Titre ou nom de fichier"
+             autocomplete="off"
+             hx-get="/ui/media" hx-target="#media-grid" hx-swap="outerHTML"
+             hx-trigger="input changed delay:300ms, search"
+             hx-include="closest form">
+    </label>
+    <input type="hidden" name="library_id" value="{{.LibraryID}}">
+    <input type="hidden" name="path" value="{{.Path}}">
+  </form>
+  <p class="muted small">
+    La recherche parcourt toute la bibliothèque ; la navigation ci-dessous suit
+    l'arborescence de vos dossiers.
+  </p>
+
+  <div id="media-grid" hx-get="/ui/media{{.InitialQuery}}" hx-trigger="load" hx-swap="outerHTML">
+    <p class="muted">Chargement…</p>
+  </div>
+</div>
+{{end}}

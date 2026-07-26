@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="auth-shell">
+  <form class="panel stack auth-card" method="post" action="/setup">
+    <h1>Premier démarrage</h1>
+    <p class="muted">
+      Créez le compte administrateur. Le mot de passe est stocké haché (bcrypt)
+      dans la base SQLite, jamais en clair et jamais dans un fichier de configuration.
+    </p>
+
+    {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+    <label class="field">
+      <span class="field-label">Identifiant</span>
+      <input type="text" name="username" required autocomplete="username"
+             value="{{.Username}}" autofocus>
+    </label>
+    <label class="field">
+      <span class="field-label">Mot de passe</span>
+      <input type="password" name="password" required minlength="8" autocomplete="new-password">
+    </label>
+    <label class="field">
+      <span class="field-label">Confirmer le mot de passe</span>
+      <input type="password" name="confirm" required minlength="8" autocomplete="new-password">
+    </label>
+
+    <button type="submit" class="btn btn-primary w-full" title="Créer le compte">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      <span>Créer le compte</span>
+    </button>
+  </form>
+</div>
+{{end}}

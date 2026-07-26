@@ -1,0 +1,16 @@
+{{define "content"}}
+<div class="stack">
+  <div class="page-head"><h1>Réglages</h1></div>
+  <div id="settings-body" class="stack">
+  {{template "settings_nav.html" "status"}}
+
+  <section class="panel stack">
+    <h2>État du serveur</h2>
+    <p class="muted">Rafraîchi automatiquement toutes les 5 secondes.</p>
+    <div id="status" hx-get="/ui/status" hx-trigger="load, every 5s">
+      <p class="muted">Chargement…</p>
+    </div>
+  </section>
+  </div>
+</div>
+{{end}}

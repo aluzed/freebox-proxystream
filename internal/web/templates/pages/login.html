@@ -1,0 +1,26 @@
+{{define "content"}}
+<div class="auth-shell">
+  <form class="panel stack auth-card" method="post" action="/login">
+    <h1>Proxystream</h1>
+    <p class="muted">Connectez-vous pour accéder à votre bibliothèque.</p>
+
+    {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+    <input type="hidden" name="next" value="{{.Next}}">
+
+    <label class="field">
+      <span class="field-label">Identifiant</span>
+      <input type="text" name="username" required autocomplete="username" autofocus>
+    </label>
+    <label class="field">
+      <span class="field-label">Mot de passe</span>
+      <input type="password" name="password" required autocomplete="current-password">
+    </label>
+
+    <button type="submit" class="btn btn-primary w-full" title="Se connecter">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>
+      <span>Se connecter</span>
+    </button>
+  </form>
+</div>
+{{end}}

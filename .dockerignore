@@ -1,0 +1,35 @@
+# Keeps the build context small and free of secrets. Only the Go sources and
+# the embedded web assets are needed to compile.
+
+.git
+.gitignore
+.dockerignore
+
+# Every .env variant, including backups. None of them belong in an image.
+.env*
+
+# Runtime state
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Build output
+/proxystream
+/dist/
+/out/
+*.test
+
+# Not needed to compile: docs and their images are ~450 KB of context.
+docs/
+README.md
+CLI.md
+LICENSE
+.github/
+.claude/
+
+# The image is built from these; it does not need to contain them.
+Dockerfile
+compose.yaml
+
+.DS_Store

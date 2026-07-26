@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>{{with .Title}}{{.}} · {{end}}Proxystream</title>
+<link rel="stylesheet" href="{{asset "app.css"}}">
+<link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
+<script src="{{asset "htmx.min.js"}}" defer></script>
+{{block "head" .}}{{end}}
+</head>
+{{/* Boost every link and form once signed in: navigation becomes an htmx
+     swap with real history, so the whole app stops doing full page loads.
+     The player opts out, see NoBoost below. */}}
+<body{{if and .User (not .NoBoost)}} hx-boost="true"{{end}}>
+
+{{if .User}}
+<header class="topbar">
+  <a class="brand" href="/">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H4z"/><path d="M9 20h6"/></svg>
+    <span>Proxystream</span>
+  </a>
+  <nav class="topnav">
+    <a href="/" class="navlink{{if eq .Nav "library"}} is-active{{end}}" title="Bibliothèque">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h2v18H6a2 2 0 0 1-2-2z"/><path d="M8 3h4v18H8z"/><path d="m14 4 4 1 3 14-4 1z"/></svg>
+      <span>Bibliothèque</span>
+    </a>
+    <a href="/settings" class="navlink{{if eq .Nav "settings"}} is-active{{end}}" title="Réglages">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Réglages</span>
+    </a>
+    <form method="post" action="/logout" class="navform">
+      <button type="button" class="btn btn-outline btn-sm" title="Se déconnecter"
+              onclick="confirmAction('Se déconnecter ?', () => this.closest('form').submit())">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        <span>Déconnexion</span>
+      </button>
+    </form>
+  </nav>
+</header>
+{{end}}
+
+<main class="page">
+{{block "content" .}}{{end}}
+</main>
+
+<dialog id="confirm-dialog" class="modal">
+  <form method="dialog" class="modal-body">
+    <h2 id="confirm-title">Confirmer</h2>
+    <p id="confirm-message"></p>
+    <div class="modal-actions">
+      <button value="cancel" class="btn btn-outline" title="Annuler">Annuler</button>
+      <button value="ok" class="btn btn-danger" id="confirm-ok" title="Confirmer">Confirmer</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="{{asset "app.js"}}" defer></script>
+{{block "scripts" .}}{{end}}
+</body>
+</html>

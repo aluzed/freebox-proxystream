@@ -1,0 +1,26 @@
+{{define "media_tiles.html"}}
+<ul class="grid">
+  {{range .}}
+  <li class="card">
+    <a href="/media/{{.ID}}" class="card-link">
+      <div class="poster is-frame">
+        <img src="/api/media/{{.ID}}/poster" alt="" loading="lazy"
+             onerror="this.closest('.poster').classList.add('no-image');this.remove()">
+        <div class="poster-placeholder" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="m9 9 6 3-6 3z"/></svg>
+        </div>
+        {{if eq .Status "error"}}<span class="badge badge-error">Erreur</span>
+        {{else if ne .Status "ready"}}<span class="badge">{{.Status}}</span>{{end}}
+      </div>
+      <div class="card-body">
+        <span class="card-title" title="{{.DisplayTitle}}">{{.DisplayTitle}}</span>
+        <span class="card-meta">
+          {{if .Year}}{{.Year}}{{end}}
+          {{if and .Season .Episode}}S{{printf "%02d" (deref .Season)}}E{{printf "%02d" (deref .Episode)}}{{end}}
+        </span>
+      </div>
+    </a>
+  </li>
+  {{end}}
+</ul>
+{{end}}

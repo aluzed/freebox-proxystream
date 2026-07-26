@@ -1,0 +1,20 @@
+{{define "breadcrumb.html"}}
+<nav class="crumbs" aria-label="Fil d'Ariane">
+  <a class="crumb" href="/"
+     hx-get="/ui/media" hx-target="#media-grid" hx-swap="outerHTML" hx-push-url="/">
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+    <span>Bibliothèques</span>
+  </a>
+  <span class="crumb-sep" aria-hidden="true">/</span>
+  <a class="crumb" href="/?library_id={{.Library.ID}}"
+     hx-get="/ui/media?library_id={{.Library.ID}}" hx-target="#media-grid"
+     hx-swap="outerHTML" hx-push-url="/?library_id={{.Library.ID}}">{{.Library.Name}}</a>
+  {{range .Crumbs}}
+  <span class="crumb-sep" aria-hidden="true">/</span>
+  <a class="crumb" href="/?library_id={{$.Library.ID}}&path={{.Path | urlquery}}"
+     hx-get="/ui/media?library_id={{$.Library.ID}}&path={{.Path | urlquery}}"
+     hx-target="#media-grid" hx-swap="outerHTML"
+     hx-push-url="/?library_id={{$.Library.ID}}&path={{.Path | urlquery}}">{{.Name}}</a>
+  {{end}}
+</nav>
+{{end}}

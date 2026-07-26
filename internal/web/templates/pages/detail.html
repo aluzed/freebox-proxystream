@@ -1,0 +1,222 @@
+{{define "content"}}
+{{$m := .Media}}
+<div class="stack">
+  <div class="backlink">
+    <a href="/" class="btn btn-outline w-full-mobile" title="Retour à la bibliothèque">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      <span>Retour</span>
+    </a>
+  </div>
+
+  <div class="detail">
+    <div class="detail-poster">
+      {{/* Same component as the grid: a frame from the middle of the file,
+           with the placeholder showing through only if there is none. */}}
+      <div class="poster is-frame">
+        <img src="/api/media/{{$m.ID}}/poster" alt="" loading="lazy"
+             onerror="this.closest('.poster').classList.add('no-image');this.remove()">
+        <div class="poster-placeholder" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="m9 9 6 3-6 3z"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-main stack">
+      <div>
+        <h1>{{$m.DisplayTitle}}</h1>
+        <p class="muted detail-meta">
+          {{if $m.Year}}{{$m.Year}} · {{end}}
+          {{if $m.DurationSec}}{{duration (deref64 $m.DurationSec)}} · {{end}}
+          {{if $m.Height}}{{$m.Height}}p · {{end}}
+          {{derefStr $m.VideoCodec}} · {{bytes $m.SizeBytes}}
+        </p>
+      </div>
+
+      {{if $m.Overview}}<p class="overview">{{$m.Overview}}</p>{{end}}
+
+      <details class="edit-details"{{if not $m.Title}} open{{end}}>
+        <summary>
+          {{if $m.UserEdited}}Titre et synopsis (modifiés par vous)
+          {{else}}Modifier le titre et le synopsis{{end}}
+        </summary>
+        <form class="stack edit-form" hx-post="/ui/media/{{$m.ID}}/details"
+              hx-target="#details-result" hx-swap="innerHTML">
+          <label class="field">
+            <span class="field-label">Titre</span>
+            <input type="text" name="title" required value="{{$m.DisplayTitle}}">
+          </label>
+          <label class="field">
+            <span class="field-label">Synopsis</span>
+            <textarea name="overview" rows="5"
+                      placeholder="Écrivez ce que vous voulez, ou laissez vide.">{{derefStr $m.Overview}}</textarea>
+          </label>
+          <div class="actions">
+            <button type="submit" class="btn btn-primary w-full-mobile" title="Enregistrer">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+              <span>Enregistrer</span>
+            </button>
+            {{if $m.UserEdited}}
+            <button type="button" class="btn btn-outline w-full-mobile"
+                    title="Revenir au titre déduit du nom de fichier"
+                    hx-post="/ui/media/{{$m.ID}}/details/reset">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+              <span>Revenir au titre automatique</span>
+            </button>
+            {{end}}
+          </div>
+          <p class="muted small">
+            Le titre est déduit du dossier et du nom de fichier. Dès que vous le
+            modifiez, plus rien ne l'écrase.
+          </p>
+          <div id="details-result"></div>
+        </form>
+      </details>
+
+      {{if eq $m.Status "error"}}
+        {{with .Failure}}
+        <div class="alert alert-error stack">
+          <div>
+            <strong>
+              {{if .Permanent}}Ce fichier n'est pas lisible.
+              {{else if .WillRetry}}L'analyse a échoué, une nouvelle tentative est prévue.
+              {{else}}L'analyse a échoué {{.Attempts}} fois, abandon.{{end}}
+            </strong>
+            <p>{{.Message}}</p>
+            {{if .Permanent}}
+              <p class="muted small">
+                Le fichier lui-même pose problème (format non reconnu, pas de
+                piste vidéo, fichier tronqué). Réessayer ne changera rien.
+              </p>
+            {{else if .WillRetry}}
+              <p class="muted small">
+                Tentative {{.Attempts}} sur {{.MaxAttempts}}.
+                {{with .NextAttempt}}Prochaine vers {{.Local.Format "15:04"}}.{{end}}
+                Les erreurs réseau, elles, finissent souvent par se résoudre.
+              </p>
+            {{end}}
+          </div>
+          <div class="actions">
+            <button type="button" class="btn btn-outline w-full-mobile"
+                    title="Relancer l'analyse de ce fichier"
+                    hx-post="/ui/media/{{$m.ID}}/retry">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+              <span>Relancer l'analyse</span>
+            </button>
+          </div>
+        </div>
+        {{end}}
+      {{else if ne $m.Status "ready"}}
+        {{/* Poll until the probe lands. The endpoint answers with HX-Refresh
+             once it does, so the whole page reloads and picks up the title,
+             the artwork and the streams at the same time. */}}
+        <div hx-get="/ui/media/{{$m.ID}}/state" hx-trigger="load delay:3s, every 3s"
+             hx-swap="outerHTML">
+          {{template "probing.html" $.Probing}}
+        </div>
+      {{end}}
+
+      {{if eq $m.Status "ready"}}
+      <form class="play-form stack" action="/watch/{{$m.ID}}" method="get" hx-boost="false">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">Qualité</span>
+            {{if eq (len .Qualities) 1}}
+              {{/* One rendition is all this source can give: a smaller file is
+                   never upscaled, so a dropdown would offer the same encode
+                   twice under two names. */}}
+              {{with index .Qualities 0}}
+              <input type="hidden" name="quality" value="{{.Height}}">
+              <select disabled aria-describedby="quality-note">
+                <option>{{.Label}}</option>
+              </select>
+              {{end}}
+              <span id="quality-note" class="muted small">
+                Résolution native du fichier, rien à choisir.
+              </span>
+            {{else}}
+              <select name="quality">
+                {{range .Qualities}}
+                <option value="{{.Height}}"{{if eq .Height $.DefaultHeight}} selected{{end}}>{{.Label}}</option>
+                {{end}}
+              </select>
+            {{end}}
+          </label>
+
+          <label class="field">
+            <span class="field-label">Piste audio</span>
+            <select name="audio">
+              {{range $m.AudioStreams}}
+              <option value="{{.AudioIndex}}"{{if eq .AudioIndex $.DefaultAudio}} selected{{end}}>
+                {{if .Lang}}{{.Lang}}{{else}}piste {{add .AudioIndex 1}}{{end}}
+                · {{.Codec}} {{.Channels}}ch{{if .Title}} · {{.Title}}{{end}}
+              </option>
+              {{end}}
+            </select>
+          </label>
+
+          {{if $m.SubStreams}}
+          <label class="field">
+            <span class="field-label">Sous-titres</span>
+            <select name="sub">
+              <option value="-1">Aucun</option>
+              {{range $m.SubStreams}}
+              <option value="{{.SubIndex}}"{{if .BurnInRequired}} disabled{{end}}>
+                {{if .Lang}}{{.Lang}}{{else}}piste {{add .SubIndex 1}}{{end}}
+                {{if .Forced}}(forcés){{end}}
+                {{if .BurnInRequired}}· {{.Codec}} non pris en charge{{end}}
+              </option>
+              {{end}}
+            </select>
+          </label>
+          {{end}}
+        </div>
+
+        <div class="actions">
+          {{if .ResumeAt}}
+          <button type="submit" name="t" value="{{.ResumeAt}}" class="btn btn-primary w-full-mobile"
+                  title="Reprendre la lecture">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 3 14 9-14 9z"/></svg>
+            <span>Reprendre à {{duration .ResumeAt}}</span>
+          </button>
+          {{end}}
+          <button type="submit" name="t" value="0"
+                  class="btn {{if .ResumeAt}}btn-outline{{else}}btn-primary{{end}} w-full-mobile"
+                  title="Lire depuis le début">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 3 14 9-14 9z"/></svg>
+            <span>Lire depuis le début</span>
+          </button>
+        </div>
+      </form>
+      {{end}}
+
+      <details class="tech">
+        <summary>Informations techniques</summary>
+        {{/* Everything below the first two lines comes from ffprobe. Printing
+             0×0 and 0 segments before it has run reads as broken metadata
+             rather than as "not measured yet". */}}
+        <dl class="deflist">
+          <dt>Chemin FTP</dt><dd><code>{{$m.FTPPath}}</code></dd>
+          <dt>Taille</dt><dd>{{bytes $m.SizeBytes}}</dd>
+          {{if $m.ProbedAt}}
+            <dt>Résolution source</dt><dd>{{deref $m.Width}}×{{deref $m.Height}}</dd>
+            <dt>Images par seconde</dt><dd>{{printf "%.3f" (deref64 $m.FPS)}}</dd>
+            <dt>Durée</dt><dd>{{duration (deref64 $m.DurationSec)}}</dd>
+            <dt>Segments</dt><dd>{{.SegmentCount}}</dd>
+          {{else}}
+            <dt>Résolution source</dt><dd class="muted">en attente d'analyse</dd>
+            <dt>Images par seconde</dt><dd class="muted">en attente d'analyse</dd>
+            <dt>Durée</dt><dd class="muted">en attente d'analyse</dd>
+            <dt>Segments</dt><dd class="muted">en attente d'analyse</dd>
+          {{end}}
+          <dt>Statut</dt><dd>{{statusLabel $m.Status}}</dd>
+        </dl>
+        {{if .EncoderLog}}
+        <h3>Journal ffmpeg</h3>
+        <pre class="log">{{range .EncoderLog}}{{.}}
+{{end}}</pre>
+        {{end}}
+      </details>
+    </div>
+  </div>
+</div>
+{{end}}

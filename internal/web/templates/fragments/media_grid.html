@@ -1,0 +1,104 @@
+{{define "media_grid.html"}}
+{{/* Swapped by outerHTML, so the id must live on this root or navigation
+     stops after one level. */}}
+<div id="media-grid" class="stack"
+     {{if .Pending}}hx-get="{{.RefreshURL}}" hx-trigger="every 10s"
+     hx-target="#media-grid" hx-swap="outerHTML"{{end}}>
+{{if .Pending}}
+  <p class="muted small analysing">
+    <span class="spinner" aria-hidden="true"></span>
+    Analyse en cours, cette liste se met à jour toute seule.
+  </p>
+{{end}}
+
+{{if .Search}}
+  {{if not .Files}}
+    <div class="empty"><p><strong>Aucun résultat pour « {{.Query}} ».</strong></p></div>
+  {{else}}
+    <p class="muted result-count">{{.Total}} résultat{{if gt .Total 1}}s{{end}}</p>
+    {{template "media_tiles.html" .Files}}
+  {{end}}
+
+{{else if not .Library}}
+  {{/* Top level: the libraries themselves are the folders. */}}
+  {{if not .Libraries}}
+    <div class="empty">
+      <p><strong>Aucune bibliothèque.</strong></p>
+      <p class="muted">Ajoutez-en une dans les réglages, puis lancez une analyse.</p>
+    </div>
+  {{else}}
+    <ul class="grid">
+      {{range .Libraries}}
+      <li>
+        <a class="folder-card" href="/?library_id={{.ID}}"
+           hx-get="/ui/media?library_id={{.ID}}" hx-target="#media-grid"
+           hx-swap="outerHTML" hx-push-url="/?library_id={{.ID}}">
+          <div class="poster is-frame folder-blank">
+            <div class="poster-placeholder" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+            </div>
+          </div>
+          <div class="folder-body">
+            <span class="folder-name" title="{{.Name}}">{{.Name}}</span>
+            <span class="folder-meta">{{if eq .Kind "tv"}}Séries{{else}}Films{{end}}</span>
+          </div>
+        </a>
+      </li>
+      {{end}}
+    </ul>
+  {{end}}
+
+{{else}}
+  {{template "breadcrumb.html" .}}
+
+  {{if and (not .Dirs) (not .Files)}}
+    <div class="empty">
+      <p><strong>Ce dossier est vide.</strong></p>
+      <p class="muted">Rien d'analysé ici pour l'instant.</p>
+    </div>
+  {{end}}
+
+  {{if .Dirs}}
+  <ul class="grid">
+    {{range .Dirs}}
+    <li>
+      <a class="folder-card"
+         href="/?library_id={{$.Library.ID}}&path={{.Path | urlquery}}"
+         hx-get="/ui/media?library_id={{$.Library.ID}}&path={{.Path | urlquery}}"
+         hx-target="#media-grid" hx-swap="outerHTML"
+         hx-push-url="/?library_id={{$.Library.ID}}&path={{.Path | urlquery}}">
+        <div class="poster is-frame">
+          {{if .CoverMediaID}}
+            <img src="/api/media/{{.CoverMediaID}}/poster" alt="" loading="lazy"
+                 onerror="this.closest('.poster').classList.add('no-image');this.remove()">
+          {{end}}
+          <div class="poster-placeholder" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+          </div>
+          <span class="folder-chip" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+          </span>
+        </div>
+        <div class="folder-body">
+          <span class="folder-name" title="{{.Name}}">{{.Label}}</span>
+          <span class="folder-meta">
+            {{if .Season}}Saison {{.Season}} · {{end}}{{.Count}} média{{if gt .Count 1}}s{{end}}
+          </span>
+        </div>
+      </a>
+    </li>
+    {{end}}
+  </ul>
+  {{end}}
+
+  {{/* A season folder is a wall of near-identical posters; a list reads far
+       better and has room for progress and duration. */}}
+  {{if .Episodes}}
+    {{template "episode_list.html" .Episodes}}
+  {{else if .Files}}
+    {{template "media_tiles.html" .Files}}
+  {{end}}
+{{end}}
+
+</div>
+{{end}}

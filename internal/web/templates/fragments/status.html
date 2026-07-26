@@ -1,0 +1,121 @@
+{{define "status.html"}}
+{{$s := .Status}}
+<div class="status stack">
+  {{if .Message}}<div class="alert alert-{{.Level}}">{{.Message}}</div>{{end}}
+
+  <div>
+    <h3>Analyse</h3>
+    {{with $s.Scan}}
+      {{if .Running}}
+        <p>
+          <span class="dot dot-live"></span>
+          {{if .LibraryName}}<strong>{{.LibraryName}}</strong> · {{end}}
+          {{if eq .Phase "listing"}}parcours du FTP, {{.Found}} fichier(s) trouvé(s)
+          {{else if eq .Phase "indexing"}}indexation de {{.Found}} fichier(s)
+          {{else if eq .Phase "metadata"}}réassociation des métadonnées {{.Probed}} sur {{add .Probed .Queued}}
+          {{else if eq .Phase "probing"}}analyse {{.Probed}} sur {{.ToProbe}}
+          {{else}}travail en cours{{end}}
+        </p>
+        {{if or (eq .Phase "probing") (eq .Phase "metadata")}}
+          <div class="meter" role="img"
+               aria-label="Analyse à {{pct64 .Probed .ToProbe}} pour cent">
+            <span style="width:{{pct64 .Probed .ToProbe}}%"></span>
+          </div>
+          {{if .CurrentFile}}<p class="muted small filename">{{.CurrentFile}}</p>{{end}}
+        {{end}}
+      {{else}}
+        <p class="muted">
+          <span class="dot"></span>
+          Rien en cours. Chaque fichier trouvé est sondé une seule fois, puis
+          n'est ré-analysé que s'il change.
+        </p>
+      {{end}}
+      {{if .LastError}}<div class="alert alert-error">{{.LastError}}</div>{{end}}
+    {{end}}
+    {{if gt $s.Retryable 0}}
+    <p class="muted small">
+      {{$s.Retryable}} fichier(s) en échec temporaire, nouvelle tentative
+      programmée automatiquement.
+    </p>
+    {{end}}
+
+    {{if $s.Libraries}}
+    <ul class="progress-list">
+      {{range $s.Libraries}}
+      <li class="progress-row">
+        <div class="progress-head">
+          <strong>{{.Name}}</strong>
+          <span class="muted small">{{.Ready}} / {{.Total}} prêt(s)</span>
+        </div>
+        <div class="meter" role="img"
+             aria-label="{{.Name}} : {{pct64 .Ready .Total}} pour cent analysé">
+          <span style="width:{{pct64 .Ready .Total}}%"></span>
+        </div>
+        <p class="muted small">
+          {{if gt .Pending 0}}{{.Pending}} en attente d'analyse{{end}}
+          {{if gt .Retryable 0}}{{if gt .Pending 0}} · {{end}}{{.Retryable}} en attente de nouvelle tentative{{end}}
+          {{if gt .Failed 0}}{{if or (gt .Pending 0) (gt .Retryable 0)}} · {{end}}{{.Failed}} en échec définitif{{end}}
+          {{if and (eq .Pending 0) (eq .Retryable 0) (eq .Failed 0)}}
+            {{if gt .Total 0}}tout est analysé{{else}}aucun fichier trouvé{{end}}
+          {{end}}
+        </p>
+      </li>
+      {{end}}
+    </ul>
+    {{end}}
+  </div>
+
+  <div>
+    <h3>Encodeurs actifs</h3>
+    {{if $s.Encoders}}
+    <ul class="encoder-list">
+      {{range $s.Encoders}}
+      <li>
+        <span class="dot dot-live"></span>
+        média #{{.MediaID}} · {{.Height}}p · piste audio {{.AudioIndex}} ·
+        démarré au segment {{.StartSeq}}, produit jusqu'à {{.Head}}
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p class="muted"><span class="dot"></span> Aucun encodage en cours.</p>
+    {{end}}
+    <p class="muted small">
+      Un encodeur ne tourne que pendant une lecture. Si vous changez de vidéo,
+      l'ancien continue encore {{$.IdleTimeout}} au cas où vous reveniez, puis
+      s'arrête tout seul. Au-delà de {{$.MaxEncoders}} en parallèle, le plus
+      ancien est recyclé. Les segments déjà produits restent en cache : y
+      revenir ne réencode rien.
+    </p>
+  </div>
+
+  <div>
+    <h3>Cache de segments</h3>
+    <p>{{bytes $s.CacheBytes}} sur {{bytes $s.CacheMax}} · {{$s.CacheItems}} segment(s)</p>
+    <div class="meter" role="img"
+         aria-label="Cache rempli à {{pct $s.CacheBytes $s.CacheMax}} pour cent">
+      <span style="width:{{pct $s.CacheBytes $s.CacheMax}}%"></span>
+    </div>
+    <p class="muted small">
+      Le cache survit aux redémarrages : c'est l'essentiel de son intérêt. Le
+      vider force un réencodage complet à la prochaine lecture.
+    </p>
+    <div class="actions">
+      <button type="button" class="btn btn-outline btn-danger-outline w-full-mobile"
+              title="Vider le cache de segments"
+              onclick="confirmAction('Vider tout le cache de segments ? Les encodages en cours seront arrêtés.', () => htmx.ajax('POST', '/ui/cache/clear', {target:'#status', swap:'innerHTML'}))">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        <span>Vider le cache</span>
+      </button>
+    </div>
+  </div>
+
+  <div>
+    <h3>Connexions</h3>
+    <dl class="deflist">
+      <dt>FTP</dt><dd><code>{{$s.FTPHost}}</code></dd>
+      <dt>Titres</dt><dd>déduits de vos dossiers et noms de fichiers</dd>
+    </dl>
+  </div>
+</div>
+{{end}}
