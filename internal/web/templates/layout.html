@@ -15,6 +15,12 @@
      The player opts out, see NoBoost below. */}}
 <body{{if and .User (not .NoBoost)}} hx-boost="true"{{end}}>
 
+{{/* Feedback surfaces, rendered on every page: a boosted swap replaces the
+     whole body, so these are recreated rather than kept. A toast that must
+     outlive a navigation travels through sessionStorage instead. */}}
+<div id="progress" class="progress" aria-hidden="true"><span></span></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
 {{if .User}}
 <header class="topbar">
   <a class="brand" href="/">

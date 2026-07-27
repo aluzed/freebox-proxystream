@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -704,6 +707,331 @@ func TestLibraryFollowsTheFolderHierarchy(t *testing.T) {
 	// And a breadcrumb back up.
 	if !strings.Contains(season, "Kaamelott") || !strings.Contains(season, "Séries") {
 		t.Error("breadcrumb does not lead back up the tree")
+	}
+}
+
+// "Retour" from a file six folders deep used to land on the library root,
+// throwing away the whole descent.
+func TestDetailGoesBackToItsOwnFolder(t *testing.T) {
+	env := newEnv(t)
+	env.signUp(t)
+	ctx := context.Background()
+
+	lib, err := env.store.CreateLibrary(ctx, "/Series", "Séries", db.KindTV)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deep, _, err := env.store.UpsertMediaFile(ctx, lib.ID,
+		"/Series/Kaamelott/Saison 1/Kaamelott.S01E01.mkv", 1<<30, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	loose, _, err := env.store.UpsertMediaFile(ctx, lib.ID,
+		"/Series/at_the_root.mkv", 1<<30, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id := strconv.FormatInt(lib.ID, 10)
+	cases := []struct {
+		media int64
+		want  string
+	}{
+		// html/template escapes the space that url.Values encoded as "+".
+		{deep, `href="/?library_id=` + id + `&amp;path=Kaamelott%2FSaison&#43;1"`},
+		{loose, `href="/?library_id=` + id + `"`},
+	}
+	for _, tc := range cases {
+		page := body(t, env.get(t, "/media/"+strconv.FormatInt(tc.media, 10)))
+		if !strings.Contains(page, tc.want) {
+			t.Errorf("media %d: back link is not %s", tc.media, tc.want)
+		}
+	}
+}
+
+// Every action has to say what it did. The outcome fragment can land off
+// screen or not at all, so the answer also carries a toast.
+func TestActionsReportThroughAToast(t *testing.T) {
+	env := newEnv(t)
+	env.signUp(t)
+	ctx := context.Background()
+
+	lib, err := env.store.CreateLibrary(ctx, "/Series", "Séries", db.KindTV)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _, err := env.store.UpsertMediaFile(ctx, lib.ID,
+		"/Series/Kaamelott/Kaamelott.S01E01.mkv", 1<<30, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	libID := strconv.FormatInt(lib.ID, 10)
+	mediaID := strconv.FormatInt(id, 10)
+
+	cases := []struct {
+		name    string
+		path    string
+		form    url.Values
+		level   string
+		reload  bool
+		refresh bool
+	}{
+		{"scan", "/ui/libraries/" + libID + "/scan", url.Values{}, "success", false, false},
+		{"refresh", "/ui/libraries/" + libID + "/refresh", url.Values{}, "success", false, false},
+		{"cache", "/ui/cache/clear", url.Values{}, "success", false, false},
+		{"save details", "/ui/media/" + mediaID + "/details",
+			url.Values{"title": {"Un titre"}}, "success", true, true},
+		{"reset details", "/ui/media/" + mediaID + "/details/reset",
+			url.Values{}, "success", true, true},
+		{"retry", "/ui/media/" + mediaID + "/retry", url.Values{}, "success", true, true},
+		// A rejected action must be as loud as one that worked.
+		{"empty title", "/ui/media/" + mediaID + "/details",
+			url.Values{"title": {"   "}}, "error", false, false},
+		{"bad library", "/ui/libraries/999999/scan", url.Values{}, "error", false, false},
+	}
+
+	for _, tc := range cases {
+		resp := env.postForm(t, tc.path, tc.form)
+		trigger := resp.Header.Get("HX-Trigger")
+		resp.Body.Close()
+
+		var events struct {
+			Toast struct {
+				Level   string `json:"level"`
+				Message string `json:"message"`
+				Reload  bool   `json:"reload"`
+			} `json:"toast"`
+		}
+		if err := json.Unmarshal([]byte(trigger), &events); err != nil {
+			t.Errorf("%s: HX-Trigger is not usable JSON (%q): %v", tc.name, trigger, err)
+			continue
+		}
+		if events.Toast.Message == "" {
+			t.Errorf("%s: no toast message in %q", tc.name, trigger)
+		}
+		if events.Toast.Level != tc.level {
+			t.Errorf("%s: toast level = %q, want %q", tc.name, events.Toast.Level, tc.level)
+		}
+		// A handler that reloads the page has to carry its message across it.
+		if events.Toast.Reload != tc.reload {
+			t.Errorf("%s: toast reload = %v, want %v", tc.name, events.Toast.Reload, tc.reload)
+		}
+		if tc.refresh && resp.Header.Get("HX-Refresh") != "true" {
+			t.Errorf("%s: expected HX-Refresh alongside the toast", tc.name)
+		}
+	}
+}
+
+// Creating a library both refreshes the list and reports; neither may drop the
+// other from the single HX-Trigger header.
+func TestTriggersAreMergedNotOverwritten(t *testing.T) {
+	env := newEnv(t)
+	env.signUp(t)
+
+	resp := env.postForm(t, "/ui/libraries", url.Values{
+		"ftp_path": {"/Films"}, "name": {"Films"}, "kind": {"movie"},
+	})
+	trigger := resp.Header.Get("HX-Trigger")
+	resp.Body.Close()
+
+	var events map[string]any
+	if err := json.Unmarshal([]byte(trigger), &events); err != nil {
+		t.Fatalf("HX-Trigger is not usable JSON (%q): %v", trigger, err)
+	}
+	if _, ok := events["libraries-changed"]; !ok {
+		t.Errorf("libraries-changed was dropped: %q", trigger)
+	}
+	if _, ok := events["toast"]; !ok {
+		t.Errorf("toast was dropped: %q", trigger)
+	}
+}
+
+// htmx silently drops a request whose hx-target matches nothing: no call, no
+// error, nothing in the log. The scan and refresh buttons pointed at #status,
+// which only exists on another page, so they did nothing at all for as long as
+// they existed. Every target a page can reach has to resolve inside it.
+func TestEveryHtmxTargetExistsOnItsPage(t *testing.T) {
+	env := newEnv(t)
+	env.signUp(t)
+	ctx := context.Background()
+
+	lib, err := env.store.CreateLibrary(ctx, "/Series", "Séries", db.KindTV)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _, err := env.store.UpsertMediaFile(ctx, lib.ID,
+		"/Series/Kaamelott/Kaamelott.S01E01.mkv", 1<<30, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A page plus the fragments it pulls in on load: that is the DOM a button
+	// on it actually sees.
+	pages := map[string][]string{
+		"/settings/libraries":                 {"/ui/libraries", "/ui/browse"},
+		"/settings/status":                    {"/ui/status"},
+		"/settings/account":                   {},
+		"/":                                   {"/ui/media"},
+		"/media/" + strconv.FormatInt(id, 10): {},
+	}
+
+	targetRe := regexp.MustCompile(`hx-target="#([a-zA-Z0-9_-]+)"`)
+
+	for page, fragments := range pages {
+		var dom strings.Builder
+		dom.WriteString(body(t, env.get(t, page)))
+		for _, f := range fragments {
+			dom.WriteString(body(t, env.get(t, f)))
+		}
+		html := dom.String()
+
+		for _, m := range targetRe.FindAllStringSubmatch(html, -1) {
+			if !strings.Contains(html, `id="`+m[1]+`"`) {
+				t.Errorf("%s: hx-target=%q resolves to nothing, so the request is never sent",
+					page, "#"+m[1])
+			}
+		}
+	}
+}
+
+// Reading a template is not enough to know a button works: the scan and
+// refresh buttons looked perfectly correct and sent nothing. This walks the
+// rendered DOM of every page, pulls out every action it can fire, and calls
+// each one for real. A route that does not exist, or one that answers without
+// telling the user anything, fails here.
+func TestEveryActionInTheUIIsWired(t *testing.T) {
+	env := newEnv(t)
+	env.signUp(t)
+	ctx := context.Background()
+
+	lib, err := env.store.CreateLibrary(ctx, "/Series", "Séries", db.KindTV)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mediaID, _, err := env.store.UpsertMediaFile(ctx, lib.ID,
+		"/Series/Kaamelott/Kaamelott.S01E01.mkv", 1<<30, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pages := map[string][]string{
+		"/settings/libraries": {"/ui/libraries", "/ui/browse"},
+		"/settings/status":    {"/ui/status"},
+		"/settings/account":   {},
+		"/":                   {"/ui/media"},
+		"/media/" + strconv.FormatInt(mediaID, 10): {},
+	}
+
+	attrRe := regexp.MustCompile(`hx-(get|post|put|delete)="([^"]+)"`)
+	ajaxRe := regexp.MustCompile(`htmx\.ajax\('([A-Z]+)',\s*'([^']+)'`)
+
+	type action struct{ method, url, page string }
+	var actions []action
+	seen := map[string]bool{}
+
+	for page, fragments := range pages {
+		dom := body(t, env.get(t, page))
+		for _, f := range fragments {
+			dom += body(t, env.get(t, f))
+		}
+		for _, m := range attrRe.FindAllStringSubmatch(dom, -1) {
+			a := action{strings.ToUpper(m[1]), html.UnescapeString(m[2]), page}
+			if !seen[a.method+" "+a.url] {
+				seen[a.method+" "+a.url] = true
+				actions = append(actions, a)
+			}
+		}
+		for _, m := range ajaxRe.FindAllStringSubmatch(dom, -1) {
+			a := action{m[1], html.UnescapeString(m[2]), page}
+			if !seen[a.method+" "+a.url] {
+				seen[a.method+" "+a.url] = true
+				actions = append(actions, a)
+			}
+		}
+	}
+
+	if len(actions) < 10 {
+		t.Fatalf("only found %d actions, the extraction is broken", len(actions))
+	}
+	t.Logf("checking %d distinct actions", len(actions))
+
+	// Deleting a library takes its media with it, so it goes last and nothing
+	// after it can be misled by the missing rows.
+	sort.SliceStable(actions, func(i, j int) bool {
+		return (actions[i].method == "DELETE") != (actions[j].method == "DELETE") &&
+			actions[j].method == "DELETE"
+	})
+
+	for _, a := range actions {
+		req, err := http.NewRequest(a.method, env.srv.URL+a.url, nil)
+		if err != nil {
+			t.Errorf("%s %s: %v", a.method, a.url, err)
+			continue
+		}
+		req.Header.Set("HX-Request", "true")
+		resp, err := env.client.Do(req)
+		if err != nil {
+			t.Errorf("%s %s (from %s): %v", a.method, a.url, a.page, err)
+			continue
+		}
+		trigger := resp.Header.Get("HX-Trigger")
+		status := resp.StatusCode
+		resp.Body.Close()
+
+		switch status {
+		case http.StatusNotFound:
+			t.Errorf("%s %s (from %s): no such route", a.method, a.url, a.page)
+		case http.StatusMethodNotAllowed:
+			t.Errorf("%s %s (from %s): route exists but not for this method",
+				a.method, a.url, a.page)
+		}
+
+		// Anything that changes state has to say so; a silent mutation is how
+		// this whole class of bug stayed invisible.
+		if a.method == "GET" || status >= 400 {
+			continue
+		}
+		if !strings.Contains(trigger, `"toast"`) {
+			t.Errorf("%s %s (from %s): changed something without reporting it (HX-Trigger=%q)",
+				a.method, a.url, a.page, trigger)
+		}
+	}
+}
+
+// Header values are read as ISO-8859-1 by browsers, so an accented message put
+// raw into HX-Trigger comes back as "mÃ©tadonnÃ©es".
+func TestToastSurvivesAccents(t *testing.T) {
+	env := newEnv(t)
+	env.signUp(t)
+	ctx := context.Background()
+
+	lib, err := env.store.CreateLibrary(ctx, "/Series", "Séries", db.KindTV)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := env.postForm(t,
+		"/ui/libraries/"+strconv.FormatInt(lib.ID, 10)+"/refresh", url.Values{})
+	trigger := resp.Header.Get("HX-Trigger")
+	resp.Body.Close()
+
+	for i := 0; i < len(trigger); i++ {
+		if trigger[i] > 127 {
+			t.Fatalf("HX-Trigger carries a raw non-ASCII byte at %d: %q", i, trigger)
+		}
+	}
+
+	// And it still decodes to the real message on the other side.
+	var events struct {
+		Toast struct {
+			Message string `json:"message"`
+		} `json:"toast"`
+	}
+	if err := json.Unmarshal([]byte(trigger), &events); err != nil {
+		t.Fatalf("HX-Trigger is not usable JSON (%q): %v", trigger, err)
+	}
+	if !strings.Contains(events.Toast.Message, "métadonnées") {
+		t.Errorf("message lost its accents: %q", events.Toast.Message)
 	}
 }
 

@@ -2,7 +2,7 @@
 {{$m := .Media}}
 <div class="stack">
   <div class="backlink">
-    <a href="/" class="btn btn-outline w-full-mobile" title="Retour à la bibliothèque">
+    <a href="{{.BackURL}}" class="btn btn-outline w-full-mobile" title="Retour au dossier">
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
       <span>Retour</span>
     </a>
@@ -23,6 +23,11 @@
 
     <div class="detail-main stack">
       <div>
+        {{if or .ShowTitle .EpisodeLabel}}
+        <p class="detail-eyebrow muted">
+          {{.ShowTitle}}{{if and .ShowTitle .EpisodeLabel}} · {{end}}{{.EpisodeLabel}}
+        </p>
+        {{end}}
         <h1>{{$m.DisplayTitle}}</h1>
         <p class="muted detail-meta">
           {{if $m.Year}}{{$m.Year}} · {{end}}

@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -39,7 +40,73 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, dat
 	buf.WriteTo(w)
 }
 
+// addTrigger merges one client-side event into HX-Trigger without dropping any
+// already set. A header written earlier as a bare event name is kept as one.
+func addTrigger(w http.ResponseWriter, name string, payload any) {
+	events := map[string]any{}
+	if cur := w.Header().Get("HX-Trigger"); cur != "" {
+		if json.Unmarshal([]byte(cur), &events) != nil {
+			events = map[string]any{cur: ""}
+		}
+	}
+	events[name] = payload
+	blob, err := json.Marshal(events)
+	if err != nil {
+		return
+	}
+	w.Header().Set("HX-Trigger", asciiJSON(blob))
+}
+
+// asciiJSON rewrites every non-ASCII rune as a \u escape. A browser decodes
+// header values as ISO-8859-1, so raw UTF-8 in HX-Trigger arrives mangled
+// ("métadonnées" reads as "mÃ©tadonnÃ©es"). Escapes are plain ASCII on the
+// wire and JSON.parse turns them back into the right characters. Only string
+// contents can be non-ASCII in marshalled JSON, so this cannot break the
+// structure.
+func asciiJSON(b []byte) string {
+	var out strings.Builder
+	out.Grow(len(b))
+	for _, r := range string(b) {
+		switch {
+		case r < 0x80:
+			out.WriteRune(r)
+		case r > 0xFFFF:
+			// Outside the BMP: JSON escapes it as a surrogate pair.
+			r -= 0x10000
+			fmt.Fprintf(&out, `\u%04x\u%04x`, 0xD800+(r>>10), 0xDC00+(r&0x3FF))
+		default:
+			fmt.Fprintf(&out, `\u%04x`, r)
+		}
+	}
+	return out.String()
+}
+
+// toast asks the browser for a notification. reload is for the handlers that
+// answer with HX-Refresh: the page is about to be replaced, so the message has
+// to survive the reload instead of being shown and immediately wiped.
+func toast(w http.ResponseWriter, level, message string, reload bool) {
+	addTrigger(w, "toast", map[string]any{
+		"level": level, "message": message, "reload": reload})
+}
+
+// announce turns the outcome a fragment already carries into a toast. Every
+// action reports through Level and Message, so wiring it here rather than in
+// each handler is what makes the feedback uniform across the app.
+func announce(w http.ResponseWriter, data any) {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return
+	}
+	level, _ := m["Level"].(string)
+	message, _ := m["Message"].(string)
+	if level == "" || message == "" {
+		return
+	}
+	toast(w, level, message, false)
+}
+
 func (s *Server) renderFragment(w http.ResponseWriter, r *http.Request, name string, data any) {
+	announce(w, data)
 	var buf bytes.Buffer
 	if err := s.tpl.RenderFragment(&buf, name, data); err != nil {
 		s.log.Error("fragment render failed", "fragment", name, "err", err)
@@ -93,10 +160,22 @@ func (s *Server) pageDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// The stored title is the episode's own; the series lives in the folder.
+	// Only for an episode: the parent of a film is "Films", not a show.
+	show := ""
+	if m.Episode != nil {
+		if got := scanner.ShowTitleFromPath(m.FTPPath); got != m.DisplayTitle() {
+			show = got
+		}
+	}
+
 	s.render(w, r, "detail.html", map[string]any{
 		"Title":         m.DisplayTitle(),
 		"Nav":           "library",
 		"Media":         m,
+		"BackURL":       s.folderURL(r, m),
+		"ShowTitle":     show,
+		"EpisodeLabel":  episodeLabel(*m),
 		"Qualities":     view.Qualities,
 		"DefaultHeight": view.DefaultHeight,
 		"DefaultAudio":  view.DefaultAudio,
@@ -106,6 +185,34 @@ func (s *Server) pageDetail(w http.ResponseWriter, r *http.Request) {
 		"Probing":       s.probingData(m),
 		"Failure":       s.failureData(r, m),
 	})
+}
+
+// folderURL points back at the folder the file sits in, so "Retour" undoes the
+// click that got here instead of dropping the user at the top of the tree.
+// Falls back to the library root when the library is gone or the file sits
+// directly in it.
+func (s *Server) folderURL(r *http.Request, m *db.Media) template.URL {
+	lib, err := s.store.GetLibrary(r.Context(), m.LibraryID)
+	if err != nil {
+		return "/"
+	}
+	q := url.Values{"library_id": {strconv.FormatInt(lib.ID, 10)}}
+	rel := strings.Trim(strings.TrimPrefix(
+		path.Dir(m.FTPPath), strings.TrimSuffix(lib.FTPPath, "/")), "/")
+	if rel != "" {
+		q.Set("path", rel)
+	}
+	return template.URL("/?" + q.Encode())
+}
+
+func episodeLabel(m db.Media) string {
+	switch {
+	case m.Season != nil && m.Episode != nil:
+		return fmt.Sprintf("S%02dE%02d", *m.Season, *m.Episode)
+	case m.Episode != nil:
+		return fmt.Sprintf("E%02d", *m.Episode)
+	}
+	return ""
 }
 
 // playerConfig is handed to the browser as one JSON blob rather than as a
@@ -390,14 +497,8 @@ type episodeRow struct {
 func (s *Server) episodeRows(r *http.Request, files []db.Media) []episodeRow {
 	out := make([]episodeRow, 0, len(files))
 	for _, m := range files {
-		row := episodeRow{Media: m, Title: m.DisplayTitle()}
+		row := episodeRow{Media: m, Title: m.DisplayTitle(), Label: episodeLabel(m)}
 
-		switch {
-		case m.Season != nil && m.Episode != nil:
-			row.Label = fmt.Sprintf("S%02dE%02d", *m.Season, *m.Episode)
-		case m.Episode != nil:
-			row.Label = fmt.Sprintf("E%02d", *m.Episode)
-		}
 		// The label already carries the numbering, so strip any copy of it at
 		// the front of the episode title.
 		if row.Label != "" {
@@ -467,6 +568,7 @@ func (s *Server) fragRetryProbe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("probe retry requested", "media_id", m.ID)
+	toast(w, "success", "Analyse relancée, ce fichier repasse en tête de file.", true)
 	w.Header().Set("HX-Refresh", "true")
 	w.WriteHeader(http.StatusOK)
 }
@@ -495,6 +597,7 @@ func (s *Server) fragSaveDetails(w http.ResponseWriter, r *http.Request) {
 			"Level": "error", "Message": "Enregistrement impossible."})
 		return
 	}
+	toast(w, "success", "Titre et synopsis enregistrés.", true)
 	w.Header().Set("HX-Refresh", "true")
 	w.WriteHeader(http.StatusOK)
 }
@@ -514,6 +617,7 @@ func (s *Server) fragResetDetails(w http.ResponseWriter, r *http.Request) {
 	if fresh, err := s.store.GetMedia(r.Context(), m.ID); err == nil {
 		s.scanner.DeriveNow(r.Context(), fresh)
 	}
+	toast(w, "success", "Titre automatique rétabli.", true)
 	w.Header().Set("HX-Refresh", "true")
 	w.WriteHeader(http.StatusOK)
 }
@@ -577,7 +681,14 @@ func (s *Server) fragDeleteLibrary(w http.ResponseWriter, r *http.Request) {
 			"Level": "error", "Message": "Suppression impossible."})
 		return
 	}
+	// The list that comes back carries no outcome of its own, so say it here.
+	toast(w, "success", "Bibliothèque supprimée.", false)
 	s.fragLibraries(w, r)
+}
+
+func (s *Server) libraryExists(r *http.Request, id int64) bool {
+	_, err := s.store.GetLibrary(r.Context(), id)
+	return err == nil
 }
 
 func (s *Server) fragScanLibrary(w http.ResponseWriter, r *http.Request) {
@@ -588,10 +699,17 @@ func (s *Server) fragScanLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := s.statusData(r, nil)
-	if err := s.scanner.EnqueueScan(id); err != nil {
-		data["Level"], data["Message"] = "error", err.Error()
-	} else {
-		data["Level"], data["Message"] = "success", "Analyse lancée."
+	switch {
+	// The queue takes any id, so without this a deleted library still answers
+	// "analyse lancée" and nothing ever happens.
+	case !s.libraryExists(r, id):
+		data["Level"], data["Message"] = "error", "Cette bibliothèque n'existe plus."
+	default:
+		if err := s.scanner.EnqueueScan(id); err != nil {
+			data["Level"], data["Message"] = "error", err.Error()
+		} else {
+			data["Level"], data["Message"] = "success", "Analyse lancée."
+		}
 	}
 	s.renderFragment(w, r, "status", data)
 }
@@ -606,11 +724,16 @@ func (s *Server) fragRefreshLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := s.statusData(r, nil)
-	if err := s.scanner.EnqueueRefresh(id); err != nil {
-		data["Level"], data["Message"] = "error", err.Error()
-	} else {
-		data["Level"], data["Message"] = "success",
-			"Réassociation des métadonnées lancée : aucun fichier ne sera relu sur le FTP."
+	switch {
+	case !s.libraryExists(r, id):
+		data["Level"], data["Message"] = "error", "Cette bibliothèque n'existe plus."
+	default:
+		if err := s.scanner.EnqueueRefresh(id); err != nil {
+			data["Level"], data["Message"] = "error", err.Error()
+		} else {
+			data["Level"], data["Message"] = "success",
+				"Réassociation des métadonnées lancée : aucun fichier ne sera relu sur le FTP."
+		}
 	}
 	s.renderFragment(w, r, "status", data)
 }

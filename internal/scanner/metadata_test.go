@@ -162,6 +162,10 @@ func TestEpisodeNumbersInEveryShape(t *testing.T) {
 		{"/V/Nicky Larson/001 - Nicky Larson - Titre.avi", -1, 1},
 		// The season comes from the folder even when the file omits it.
 		{"/V/Conan/Saison 02/Conan Episode 43.avi", 2, 43},
+		// Releases separate "Ep" from its number with a dot, not a space.
+		// Missing this left whole seasons unnumbered, so shown as cards.
+		{"/V/Conan/Saison 02/Detective.Conan.Ep.043.Le.Kidnapping.DVDRip.mkv", 2, 43},
+		{"/V/Conan/Saison.02/Detective.Conan.Ep.044.L.Anniversaire.mkv", 2, 44},
 	}
 	for _, tc := range cases {
 		p := ParseFilename(tc.path)
@@ -181,6 +185,45 @@ func TestFilmsAreStillFilms(t *testing.T) {
 		p := ParseFilename(path)
 		if p.Episode != nil {
 			t.Errorf("%s: parsed an episode number %d", path, *p.Episode)
+		}
+	}
+}
+
+// A season list where every row reads "Nicky Larson" is useless: when the
+// filename names the episode, that name is what the row must show. When it
+// only numbers it, the show name stands in.
+func TestEpisodeTitleComesFromTheFilename(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"/V/Nicky Larson/001 - Nicky Larson - Un cocktail dangereux.avi", "Un cocktail dangereux"},
+		{"/V/Aladdin/Saison 1/Aladdin_-_1x01_-_Les_1001_plumes.avi", "Les 1001 plumes"},
+		{"/V/Kaamelott/Kaamelott S01E23 - Les Tartes aux myrtilles.mkv", "Les Tartes aux myrtilles"},
+		// Numbering and nothing else: there is no episode title to find.
+		{"/V/Recess.S03.FRENCH.WEB.H264-CUSThOMe/Recess.S03E01.mkv", ""},
+		{"/V/The Office/Season 2/The.Office.S02E01.1080p.WEB.x264-GRP.mkv", ""},
+		{"/V/Detective Conan/Saison 02/Detective Conan 043.avi", ""},
+		{"/V/Jeanne et Serge.Intégrale/JS 01.avi", ""},
+		// The releaser's signature is not an episode title, in either form.
+		{"/V/Funky Cops/Funky Cops Saison 1 EP 01 - up by TakeASuit.mp4", ""},
+		{"/V/Docteur Globule/Docteur.Globule.E02.Toutou.Ou.Rien[UpToTen].mp4", "Toutou Ou Rien"},
+		// A dot between "Ep" and the number, which is how releases write it.
+		{"/V/Detective Conan/Saison 02/Detective.Conan.Ep.043.Le.Kidnapping.De.Conan.Edogawa.DVDRip.x264.AC3.Chap.mkv",
+			"Le Kidnapping De Conan Edogawa"},
+		// Past the numbering there are only tags, so there is no title here.
+		{"/V/Le Bus Magique/S01 - Repack par Davicroquette/Le_Bus_Magique_S01E01-_Repack_par_Davicroquette.mkv", ""},
+		{"/V/la vie de famille/saison 4/La Vie De Famille S04E01.VF.mp4", ""},
+		{"/V/Detective Conan/Saison 18/Detective.Conan.S18E01.FANSUB.VOSTFR.720p.HDTV.x264-Wawacity.uno.mp4", ""},
+		// "vo" and "vf" are tags as whole words only, never inside one.
+		{"/V/Show/Show.S01E04 - Le Voyage vers Vfoo.mkv", "Le Voyage vers Vfoo"},
+		// A release group signing the end of the name.
+		{"/V/Timon/Timon & Pumbaa S01E12 - Piraterie carabinée MTL666.mkv", "Piraterie carabinée"},
+	}
+	for _, tc := range cases {
+		show := ShowTitleFromPath(tc.path)
+		if got := episodeTitle(tc.path, show); got != tc.want {
+			t.Errorf("episodeTitle(%q, %q) = %q, want %q", tc.path, show, got, tc.want)
 		}
 	}
 }

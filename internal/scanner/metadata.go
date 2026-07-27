@@ -23,12 +23,17 @@ var (
 	// go-parse-torrent-name misses a few common European release patterns.
 	seasonEpisodeRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s(\d{1,2})[\s._-]*e(\d{1,3})(?:[^0-9]|$)`)
 	altEpisodeRe    = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(\d{1,2})x(\d{1,3})(?:[^0-9]|$)`)
-	// "Funky Cops Saison 1 EP 01", "Saison 02 Episode 3".
-	wordSeasonEpRe = regexp.MustCompile(`(?i)sai?son\s*(\d{1,2}).{0,12}?(?:ep|épisode|episode)\s*(\d{1,3})`)
+	// "Funky Cops Saison 1 EP 01", "Saison 02 Episode 3". The separator before
+	// the number is whatever the release used: "Ep 043", "Ep.043", "Ep_043".
+	wordSeasonEpRe = regexp.MustCompile(`(?i)sai?son[\s._-]*(\d{1,2}).{0,12}?(?:ep|épisode|episode)[\s._-]*(\d{1,3})`)
 	// "Saison 02" or "Season 2" on its own, usually the folder name.
-	wordSeasonRe = regexp.MustCompile(`(?i)(?:^|[^a-z])sai?son\s*(\d{1,2})(?:[^0-9]|$)`)
+	wordSeasonRe = regexp.MustCompile(`(?i)(?:^|[^a-z])sai?son[\s._-]*(\d{1,2})(?:[^0-9]|$)`)
 	// "EP 01" / "Episode 12" with no season stated.
-	wordEpisodeRe = regexp.MustCompile(`(?i)(?:^|[^a-z])(?:ep|épisode|episode)\s*(\d{1,3})(?:[^0-9]|$)`)
+	wordEpisodeRe = regexp.MustCompile(`(?i)(?:^|[^a-z])(?:ep|épisode|episode)[\s._-]*(\d{1,3})(?:[^0-9]|$)`)
+	// A bare "E01" with no season, as in "Docteur.Globule.E01.Bienvenue".
+	// Title extraction only: go-parse-torrent-name already numbers these, so
+	// widening the switch below would change nothing but could misfire.
+	bareEpisodeRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])e[\s._-]*(\d{1,3})(?:[^0-9]|$)`)
 	// A leading number used as the episode index: "001 - Show - Title".
 	leadingNumberRe = regexp.MustCompile(`^(\d{1,3})\s*[-_.]\s*\S`)
 	// A bare "S03" token, as in "Recess.S03.FRENCH.WEB".
@@ -160,17 +165,19 @@ func ShowTitleFromPath(ftpPath string) string {
 	return cleanTitle(fallbackTitle(name))
 }
 
+var releaseMarkers = []string{
+	"1080p", "720p", "2160p", "480p", "540p", "4k", "bluray", "blu-ray",
+	"bdrip", "webrip", "web-dl", "webdl", "hdtv", "dvdrip", "x264", "x265",
+	"h264", "h265", "hevc", "xvid", "multi", "vostfr", "truefrench",
+	"french", "integrale", "intégrale", "complete", "complet",
+	"repack", "proper", "remux",
+}
+
 // fallbackTitle keeps everything before the first release-noise token.
 func fallbackTitle(name string) string {
 	lowered := strings.ToLower(name)
-	markers := []string{
-		"1080p", "720p", "2160p", "480p", "540p", "4k", "bluray", "blu-ray",
-		"bdrip", "webrip", "web-dl", "webdl", "hdtv", "dvdrip", "x264", "x265",
-		"h264", "h265", "hevc", "xvid", "multi", "vostfr", "truefrench",
-		"french", "integrale", "intégrale", "complete", "complet",
-	}
 	cut := len(name)
-	for _, mk := range markers {
+	for _, mk := range releaseMarkers {
 		if i := strings.Index(lowered, mk); i > 0 && i < cut {
 			cut = i
 		}
@@ -186,6 +193,11 @@ func fallbackTitle(name string) string {
 func cleanTitle(s string) string {
 	s = strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(s)
 	s = strings.Join(strings.Fields(s), " ")
+	// Cutting at a release marker can leave a bracket hanging open, as in
+	// "Fruits Basket 14[BD". Nothing readable follows it.
+	if i := strings.LastIndex(s, "["); i >= 0 && !strings.Contains(s[i:], "]") {
+		s = s[:i]
+	}
 	return strings.TrimSpace(s)
 }
 
@@ -195,6 +207,104 @@ func atoiPtr(s string) *int {
 		return nil
 	}
 	return &n
+}
+
+// uploaderRe is the signature releasers leave where an episode title would be:
+// "Funky Cops Saison 1 EP 01 - up by TakeASuit", "S01E01 - Repack par
+// Davicroquette". "par" alone is a common French word, so it only counts
+// behind one of these verbs.
+var uploaderRe = regexp.MustCompile(
+	`(?i)\b(?:up|upload|uploaded|rip|ripped|encoded|repack|remux)\s+(?:by|par)\b`)
+
+// The same signature in its other form, glued to the title: "Toutou Ou
+// Rien[UpToTen]". Square brackets only: parentheses carry real title parts.
+var bracketTagRe = regexp.MustCompile(`\s*\[[^\]]*\]`)
+
+// Everything past the episode number that is a language or encoding tag
+// rather than a title: "La Vie De Famille S04E01.VF" has no episode title.
+// Matched as whole words, never as substrings, or "vo" would truncate
+// "Le Voyage" and "vf" would be looked for inside real words.
+var noiseTokens = map[string]bool{
+	"vf": true, "vff": true, "vfq": true, "vfi": true, "vo": true,
+	"vof": true, "fansub": true, "fastsub": true, "ia": true,
+	"uncensored": true, "custom": true, "uncut": true,
+	"vost": true, "vostfr": true, "subfrench": true, "truefrench": true,
+	"french": true, "multi": true, "repack": true, "proper": true,
+	"remux": true, "integrale": true, "intégrale": true, "complete": true,
+	"chap": true, "aac": true, "ac3": true, "dts": true, "avc": true,
+	"mp3": true, "x264": true, "x265": true, "h264": true, "h265": true,
+	"hevc": true, "xvid": true, "divx": true, "dvdrip": true, "bdrip": true,
+	"webrip": true, "hdtv": true, "bluray": true, "web": true, "dl": true,
+	"1080p": true, "720p": true, "480p": true, "540p": true, "2160p": true,
+}
+
+// groupTagRe is a release group signing the end of the name: "Piraterie
+// carabinée MTL666". Capitals glued to digits, which no title word is.
+var groupTagRe = regexp.MustCompile(`\s+[A-Z]{2,}\d+$`)
+
+// cutAtNoiseToken keeps what comes before the first tag word.
+func cutAtNoiseToken(s string) string {
+	fields := strings.Fields(s)
+	for i, f := range fields {
+		if noiseTokens[strings.ToLower(f)] {
+			return strings.Join(fields[:i], " ")
+		}
+	}
+	return s
+}
+
+// episodeTitle digs out what the filename says past the numbering, which is
+// the episode's own name: "Aladdin_-_1x01_-_Les_1001_plumes" is "Les 1001
+// plumes". Parsed.Title cannot answer this, it is truncated at the numbering.
+// Returns "" when nothing usable is left, the common case for
+// "Show.S01E02.mkv", so the caller can keep the show name.
+func episodeTitle(ftpPath, show string) string {
+	base := path.Base(ftpPath)
+	name := strings.TrimSuffix(base, path.Ext(base))
+
+	rest := ""
+	for _, re := range []*regexp.Regexp{
+		seasonEpisodeRe, altEpisodeRe, wordSeasonEpRe, wordEpisodeRe,
+		bareEpisodeRe, leadingNumberRe,
+	} {
+		m := re.FindStringSubmatchIndex(name)
+		if m == nil {
+			continue
+		}
+		end := m[3] // end of the first capture, then push past any later one
+		for i := 2; 2*i+1 < len(m); i++ {
+			if e := m[2*i+1]; e > end {
+				end = e
+			}
+		}
+		rest = name[end:]
+		break
+	}
+
+	rest = cleanTitle(bracketTagRe.ReplaceAllString(rest, ""))
+	if loc := uploaderRe.FindStringIndex(rest); loc != nil {
+		rest = strings.TrimSpace(rest[:loc[0]])
+	}
+	rest = strings.TrimSpace(groupTagRe.ReplaceAllString(cutAtNoiseToken(rest), ""))
+	// The filename usually repeats the show before the episode's own title.
+	if len(rest) >= len(show) && strings.EqualFold(rest[:len(show)], show) {
+		rest = strings.TrimSpace(rest[len(show):])
+	}
+	// A leftover of one letter or less is a fragment, not a title.
+	if countLetters(rest) < 2 {
+		return ""
+	}
+	return rest
+}
+
+func countLetters(s string) int {
+	n := 0
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r > 127 {
+			n++
+		}
+	}
+	return n
 }
 
 // deriveMetadata names a file from its own path. There is no online catalogue
@@ -210,13 +320,21 @@ func (s *Scanner) deriveMetadata(ctx context.Context, m *db.Media) error {
 	p := ParseFilename(m.FTPPath)
 	title := p.Title
 
-	// Several videos in one folder is a season, and the folder is where the
-	// show is spelled properly. "Nicky Larson" beats "001 - Nicky Larson -
-	// Un cocktail dangereux".
-	n, err := s.store.CountVideosInFolder(ctx, m.LibraryID, m.FTPPath)
-	if err == nil && n > 1 {
-		if show := ShowTitleFromPath(m.FTPPath); show != "" {
-			title = show
+	// A numbered file in a folder of several is an episode. The folder spells
+	// the show properly, so it wins whenever the file has nothing of its own
+	// to say, but a file that carries an episode title keeps it: naming twenty
+	// rows "Nicky Larson" tells the reader nothing about which to watch.
+	// Without a number it is a film, and a folder of films must not rename
+	// them all after the folder.
+	if p.Episode != nil {
+		n, err := s.store.CountVideosInFolder(ctx, m.LibraryID, m.FTPPath)
+		if err == nil && n > 1 {
+			if show := ShowTitleFromPath(m.FTPPath); show != "" {
+				title = show
+				if ep := episodeTitle(m.FTPPath, show); ep != "" {
+					title = ep
+				}
+			}
 		}
 	}
 	if title == "" {
