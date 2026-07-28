@@ -7,13 +7,17 @@
 {{if .Pending}}
   <p class="muted small analysing">
     <span class="spinner" aria-hidden="true"></span>
-    Analyse en cours, cette liste se met à jour toute seule.
+    Analyse en cours. La liste se complète toute seule.
   </p>
 {{end}}
 
 {{if .Search}}
   {{if not .Files}}
-    <div class="empty"><p><strong>Aucun résultat pour « {{.Query}} ».</strong></p></div>
+    <div class="empty">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/><path d="m8.5 8.5 5 5"/><path d="m13.5 8.5-5 5"/></svg>
+      <p><strong>Rien pour « {{.Query}} ».</strong></p>
+      <p class="muted">Essayez un autre mot, ou un bout du nom de fichier.</p>
+    </div>
   {{else}}
     <p class="muted result-count">{{.Total}} résultat{{if gt .Total 1}}s{{end}}</p>
     {{template "media_tiles.html" .Files}}
@@ -23,8 +27,13 @@
   {{/* Top level: the libraries themselves are the folders. */}}
   {{if not .Libraries}}
     <div class="empty">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 12v5"/><path d="M9.5 14.5h5"/></svg>
       <p><strong>Aucune bibliothèque.</strong></p>
       <p class="muted">Ajoutez-en une dans les réglages, puis lancez une analyse.</p>
+      <a href="/settings/libraries" class="btn btn-primary" title="Ajouter une bibliothèque">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        <span>Ajouter une bibliothèque</span>
+      </a>
     </div>
   {{else}}
     <ul class="grid">
@@ -53,7 +62,8 @@
 
   {{if and (not .Dirs) (not .Files)}}
     <div class="empty">
-      <p><strong>Ce dossier est vide.</strong></p>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+      <p><strong>Dossier vide.</strong></p>
       <p class="muted">Rien d'analysé ici pour l'instant.</p>
     </div>
   {{end}}
@@ -81,8 +91,15 @@
         </div>
         <div class="folder-body">
           <span class="folder-name" title="{{.Name}}">{{.Label}}</span>
+          {{/* Where you are in a folder is the one thing worth reading on a
+               closed folder, so it wins the meta line over the raw count. */}}
           <span class="folder-meta">
-            {{if .Season}}Saison {{.Season}} · {{end}}{{.Count}} média{{if gt .Count 1}}s{{end}}
+            {{if .Season}}Saison {{.Season}} · {{end}}
+            {{if gt .Watched 0}}
+              <span class="folder-seen{{if eq .Watched .Count}} is-done{{end}}">{{.Watched}}/{{.Count}} vus</span>
+            {{else}}
+              {{.Count}} média{{if gt .Count 1}}s{{end}}
+            {{end}}
           </span>
         </div>
       </a>

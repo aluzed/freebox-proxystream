@@ -300,7 +300,10 @@ func (s *Server) apiSaveProgress(w http.ResponseWriter, r *http.Request) {
 	if body.PositionSec < 0 {
 		body.PositionSec = 0
 	}
-	if err := s.store.SaveProgress(r.Context(), m.ID, body.PositionSec); err != nil {
+	// Crossing the mark raises the seen flag; it never lowers it, and sitting
+	// past it does not raise it again once someone has unticked the box.
+	if err := s.store.SaveProgress(r.Context(), m.ID, body.PositionSec,
+		watchedFrom(m.DurationSec)); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not save progress")
 		return
 	}

@@ -5,8 +5,29 @@
   const video = document.getElementById('player');
   const status = document.getElementById('player-status');
 
-  function say(message) {
-    if (status) status.textContent = message || '';
+  // A message that describes work in progress carries a spinner; a plain one
+  // does not. Building the node beats an innerHTML string carrying a value we
+  // did not write.
+  function say(message, busy) {
+    if (!status) return;
+    status.replaceChildren();
+    if (!message) return;
+    if (busy) {
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      status.append(spinner);
+    }
+    status.append(document.createTextNode(message));
+  }
+
+  // The on-screen keycap for a shortcut sinks while the key is held, so the
+  // legend answers "did that register" without looking at the video.
+  function flashKey(key) {
+    const cap = document.querySelector('kbd[data-key="' + (key === 'k' ? ' ' : key) + '"]');
+    if (!cap) return;
+    cap.classList.add('is-down');
+    setTimeout(() => cap.classList.remove('is-down'), 160);
   }
 
   function attach() {
@@ -35,11 +56,11 @@
       if (!data.fatal) return;
       switch (data.type) {
         case Hls.ErrorTypes.NETWORK_ERROR:
-          say('Interruption réseau, reprise en cours…');
+          say('Réseau coupé, reprise…', true);
           hls.startLoad();
           break;
         case Hls.ErrorTypes.MEDIA_ERROR:
-          say('Erreur de décodage, récupération en cours…');
+          say('Erreur de décodage, récupération…', true);
           hls.recoverMediaError();
           break;
         default:
@@ -109,13 +130,16 @@
     }
   }, { once: true });
 
-  video.addEventListener('waiting', () => say('Mise en mémoire tampon…'));
+  video.addEventListener('waiting', () => say('Mise en mémoire tampon…', true));
   video.addEventListener('playing', () => say(''));
 
   // ---- keyboard ----
 
+  const HANDLED = [' ', 'k', 'ArrowRight', 'ArrowLeft', 'f', 'm'];
+
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, select, textarea')) return;
+    if (HANDLED.includes(e.key)) flashKey(e.key);
     switch (e.key) {
       case ' ':
       case 'k':

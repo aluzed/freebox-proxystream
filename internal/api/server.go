@@ -87,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 	protected.HandleFunc("POST /ui/media/{id}/retry", s.fragRetryProbe)
 	protected.HandleFunc("POST /ui/media/{id}/details", s.fragSaveDetails)
 	protected.HandleFunc("POST /ui/media/{id}/details/reset", s.fragResetDetails)
+	protected.HandleFunc("POST /ui/media/{id}/watched", s.fragToggleWatched)
 	protected.HandleFunc("GET /ui/browse", s.fragBrowse)
 	protected.HandleFunc("GET /ui/libraries", s.fragLibraries)
 	protected.HandleFunc("POST /ui/libraries", s.fragCreateLibrary)

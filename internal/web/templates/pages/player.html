@@ -8,7 +8,9 @@
     </a>
   </div>
 
-  <h1 class="player-title">{{$m.DisplayTitle}}</h1>
+  <div class="player-head">
+    <h1 class="player-title">{{$m.DisplayTitle}}</h1>
+  </div>
 
   <div class="player-shell">
     <video id="player" controls playsinline autoplay
@@ -17,9 +19,37 @@
 
   <p id="player-status" class="muted" role="status"></p>
 
-  <p class="muted player-hint">
-    Espace : lecture/pause · ← → : 10 s · F : plein écran · M : muet
-  </p>
+  {{/* data-key must match the values player.js switches on: pressing a key
+       lights its cap here, so the two lists cannot drift apart silently. */}}
+  <ul class="shortcuts" aria-label="Raccourcis clavier">
+    <li class="shortcut">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 4 12 8-12 8z"/></svg>
+      <span class="shortcut-label">Lecture, pause</span>
+      <span class="shortcut-keys"><kbd data-key=" ">Espace</kbd></span>
+    </li>
+    <li class="shortcut">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5 3 12l5 7"/><path d="m16 5 5 7-5 7"/><path d="M12 8v8"/></svg>
+      <span class="shortcut-label">10 secondes</span>
+      <span class="shortcut-keys">
+        <kbd data-key="ArrowLeft" aria-label="Flèche gauche">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5"/><path d="m11 6-6 6 6 6"/></svg>
+        </kbd>
+        <kbd data-key="ArrowRight" aria-label="Flèche droite">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15"/><path d="m13 6 6 6-6 6"/></svg>
+        </kbd>
+      </span>
+    </li>
+    <li class="shortcut">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      <span class="shortcut-label">Plein écran</span>
+      <span class="shortcut-keys"><kbd data-key="f">F</kbd></span>
+    </li>
+    <li class="shortcut">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m17 9 4 6"/><path d="m21 9-4 6"/></svg>
+      <span class="shortcut-label">Muet</span>
+      <span class="shortcut-keys"><kbd data-key="m">M</kbd></span>
+    </li>
+  </ul>
 </div>
 {{end}}
 

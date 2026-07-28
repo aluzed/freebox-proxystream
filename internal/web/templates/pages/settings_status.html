@@ -5,10 +5,12 @@
   {{template "settings_nav.html" "status"}}
 
   <section class="panel stack">
-    <h2>État du serveur</h2>
-    <p class="muted">Rafraîchi automatiquement toutes les 5 secondes.</p>
+    <div class="page-head">
+      <h2>État du serveur</h2>
+      <span class="live-tag"><span class="dot dot-live"></span>Direct, toutes les 5 s</span>
+    </div>
     <div id="status" hx-get="/ui/status" hx-trigger="load, every 5s">
-      <p class="muted">Chargement…</p>
+      <p class="muted analysing"><span class="spinner" aria-hidden="true"></span> Chargement…</p>
     </div>
   </section>
   </div>

@@ -11,11 +11,9 @@
       <dt>Créé le</dt><dd>{{.User.CreatedAt.Local.Format "02/01/2006 à 15:04"}}</dd>
       <dt>Mot de passe modifié</dt><dd>{{.User.UpdatedAt.Local.Format "02/01/2006 à 15:04"}}</dd>
     </dl>
-    <p class="muted">
-      Les identifiants sont stockés hachés (bcrypt) dans la base SQLite, jamais
-      dans un fichier de configuration. En ligne de commande :
-      <code>proxystream users</code> pour les lister,
-      <code>proxystream passwd</code> pour changer le mot de passe.
+    <p class="hint">
+      Mots de passe hachés (bcrypt) en base, jamais dans un fichier. En ligne de
+      commande : <code>proxystream users</code>, <code>proxystream passwd</code>.
     </p>
   </section>
 
@@ -42,9 +40,8 @@
           <span>Changer le mot de passe</span>
         </button>
       </div>
-      <p class="muted">
-        Au moins 8 caractères. Toutes les sessions seront déconnectées, y compris
-        celle-ci : vous devrez vous reconnecter.
+      <p class="hint">
+        8 caractères minimum. Toutes les sessions sautent, celle-ci comprise.
       </p>
       <div id="password-result"></div>
     </form>

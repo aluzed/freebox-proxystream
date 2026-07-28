@@ -6,22 +6,19 @@
 
   <section class="panel stack">
     <h2>Bibliothèques</h2>
-    <p class="muted">
-      Un dossier du FTP, analysé récursivement jusqu'à 6 niveaux de
-      profondeur. L'heure de dernière analyse se met à jour toute seule.
-    </p>
+    <p class="hint">Un dossier FTP, exploré jusqu'à 6 niveaux de profondeur.</p>
     <div id="libraries" hx-get="/ui/libraries"
          hx-trigger="load, libraries-changed from:body, every 15s">
-      <p class="muted">Chargement…</p>
+      <p class="muted analysing"><span class="spinner" aria-hidden="true"></span> Chargement…</p>
     </div>
   </section>
 
   <section class="panel stack">
     <h2>Ajouter une bibliothèque</h2>
-    <p class="muted">Parcourez le FTP de la Freebox et choisissez un dossier.</p>
+    <p class="hint">Parcourez le FTP de la Freebox, choisissez un dossier.</p>
 
     <div id="browse" hx-get="/ui/browse" hx-trigger="load">
-      <p class="muted">Connexion au FTP…</p>
+      <p class="muted analysing"><span class="spinner" aria-hidden="true"></span> Connexion au FTP…</p>
     </div>
 
     <form class="stack" hx-post="/ui/libraries" hx-target="#library-form-result" hx-swap="innerHTML">

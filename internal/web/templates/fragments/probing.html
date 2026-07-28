@@ -4,20 +4,16 @@
   <span class="spinner" aria-hidden="true"></span>
   <div>
     <strong>
-      {{if eq $m.Status "probing"}}Analyse de ce fichier en cours…
-      {{else}}Ce fichier attend son tour dans la file d'analyse.{{end}}
+      {{if eq $m.Status "probing"}}Analyse en cours…
+      {{else}}En file d'attente.{{end}}
     </strong>
     <p>
-      Chaque fichier est ouvert une fois pour lire sa durée, ses pistes audio et
-      ses sous-titres. Sans cette étape, impossible de construire la playlist,
-      donc pas de lecture.
-      {{if gt .Pending 1}}
-        Il reste <strong>{{.Pending}}</strong> fichier(s) à analyser.
-      {{end}}
+      Une seule lecture du fichier : durée, pistes audio, sous-titres. Sans
+      elle, pas de playlist, donc pas de lecture.
+      {{if gt .Pending 1}}Encore <strong>{{.Pending}}</strong> fichiers.{{end}}
     </p>
-    <p>
-      Cette page se met à jour toute seule.
-      <a href="/settings/status">Suivre l'avancement</a>
+    <p class="hint">
+      Mise à jour automatique. <a href="/settings/status">Suivre l'avancement</a>
     </p>
   </div>
 </div>

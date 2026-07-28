@@ -4,7 +4,7 @@
   {{if .Message}}<div class="alert alert-{{.Level}}">{{.Message}}</div>{{end}}
 
   <div>
-    <h3>Analyse</h3>
+    <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Analyse</h3>
     {{with $s.Scan}}
       {{if .Running}}
         <p>
@@ -26,17 +26,13 @@
       {{else}}
         <p class="muted">
           <span class="dot"></span>
-          Rien en cours. Chaque fichier trouvé est sondé une seule fois, puis
-          n'est ré-analysé que s'il change.
+          Rien en cours. Un fichier n'est ré-analysé que s'il change.
         </p>
       {{end}}
       {{if .LastError}}<div class="alert alert-error">{{.LastError}}</div>{{end}}
     {{end}}
     {{if gt $s.Retryable 0}}
-    <p class="muted small">
-      {{$s.Retryable}} fichier(s) en échec temporaire, nouvelle tentative
-      programmée automatiquement.
-    </p>
+    <p class="hint">{{$s.Retryable}} fichier(s) en échec temporaire, réessai programmé.</p>
     {{end}}
 
     {{if $s.Libraries}}
@@ -51,9 +47,9 @@
              aria-label="{{.Name}} : {{pct64 .Ready .Total}} pour cent analysé">
           <span style="width:{{pct64 .Ready .Total}}%"></span>
         </div>
-        <p class="muted small">
-          {{if gt .Pending 0}}{{.Pending}} en attente d'analyse{{end}}
-          {{if gt .Retryable 0}}{{if gt .Pending 0}} · {{end}}{{.Retryable}} en attente de nouvelle tentative{{end}}
+        <p class="hint">
+          {{if gt .Pending 0}}{{.Pending}} à analyser{{end}}
+          {{if gt .Retryable 0}}{{if gt .Pending 0}} · {{end}}{{.Retryable}} à réessayer{{end}}
           {{if gt .Failed 0}}{{if or (gt .Pending 0) (gt .Retryable 0)}} · {{end}}{{.Failed}} en échec définitif{{end}}
           {{if and (eq .Pending 0) (eq .Retryable 0) (eq .Failed 0)}}
             {{if gt .Total 0}}tout est analysé{{else}}aucun fichier trouvé{{end}}
@@ -66,39 +62,36 @@
   </div>
 
   <div>
-    <h3>Encodeurs actifs</h3>
+    <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-9 12h7l-2 8 9-12h-7z"/></svg>Encodeurs actifs</h3>
     {{if $s.Encoders}}
     <ul class="encoder-list">
       {{range $s.Encoders}}
       <li>
         <span class="dot dot-live"></span>
-        média #{{.MediaID}} · {{.Height}}p · piste audio {{.AudioIndex}} ·
-        démarré au segment {{.StartSeq}}, produit jusqu'à {{.Head}}
+        média #{{.MediaID}} · {{.Height}}p · audio {{.AudioIndex}} ·
+        segments {{.StartSeq}} → {{.Head}}
       </li>
       {{end}}
     </ul>
     {{else}}
     <p class="muted"><span class="dot"></span> Aucun encodage en cours.</p>
     {{end}}
-    <p class="muted small">
-      Un encodeur ne tourne que pendant une lecture. Si vous changez de vidéo,
-      l'ancien continue encore {{$.IdleTimeout}} au cas où vous reveniez, puis
-      s'arrête tout seul. Au-delà de {{$.MaxEncoders}} en parallèle, le plus
-      ancien est recyclé. Les segments déjà produits restent en cache : y
-      revenir ne réencode rien.
+    <p class="hint">
+      Un encodeur vit le temps d'une lecture, puis s'arrête après {{$.IdleTimeout}}
+      sans personne. Au-delà de {{$.MaxEncoders}} en parallèle, le plus ancien
+      est recyclé. Les segments produits restent en cache.
     </p>
   </div>
 
   <div>
-    <h3>Cache de segments</h3>
+    <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>Cache de segments</h3>
     <p>{{bytes $s.CacheBytes}} sur {{bytes $s.CacheMax}} · {{$s.CacheItems}} segment(s)</p>
     <div class="meter" role="img"
          aria-label="Cache rempli à {{pct $s.CacheBytes $s.CacheMax}} pour cent">
       <span style="width:{{pct $s.CacheBytes $s.CacheMax}}%"></span>
     </div>
-    <p class="muted small">
-      Le cache survit aux redémarrages : c'est l'essentiel de son intérêt. Le
-      vider force un réencodage complet à la prochaine lecture.
+    <p class="hint">
+      Le cache survit aux redémarrages. Le vider force un réencodage complet.
     </p>
     <div class="actions">
       <button type="button" class="btn btn-outline btn-danger-outline w-full-mobile"
@@ -111,7 +104,7 @@
   </div>
 
   <div>
-    <h3>Connexions</h3>
+    <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/></svg>Connexions</h3>
     <dl class="deflist">
       <dt>FTP</dt><dd><code>{{$s.FTPHost}}</code></dd>
       <dt>Titres</dt><dd>déduits de vos dossiers et noms de fichiers</dd>

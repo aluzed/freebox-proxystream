@@ -29,11 +29,14 @@
         </p>
         {{end}}
         <h1>{{$m.DisplayTitle}}</h1>
+        {{/* One chip per fact: a run of dots collapses into an unreadable line
+             the moment a codec name is long. */}}
         <p class="muted detail-meta">
-          {{if $m.Year}}{{$m.Year}} · {{end}}
-          {{if $m.DurationSec}}{{duration (deref64 $m.DurationSec)}} · {{end}}
-          {{if $m.Height}}{{$m.Height}}p · {{end}}
-          {{derefStr $m.VideoCodec}} · {{bytes $m.SizeBytes}}
+          {{if $m.Year}}<span>{{$m.Year}}</span>{{end}}
+          {{if $m.DurationSec}}<span>{{duration (deref64 $m.DurationSec)}}</span>{{end}}
+          {{if $m.Height}}<span>{{$m.Height}}p</span>{{end}}
+          {{with derefStr $m.VideoCodec}}<span>{{.}}</span>{{end}}
+          <span>{{bytes $m.SizeBytes}}</span>
         </p>
       </div>
 
@@ -41,8 +44,8 @@
 
       <details class="edit-details"{{if not $m.Title}} open{{end}}>
         <summary>
-          {{if $m.UserEdited}}Titre et synopsis (modifiés par vous)
-          {{else}}Modifier le titre et le synopsis{{end}}
+          {{if $m.UserEdited}}Titre et synopsis, modifiés par vous
+          {{else}}Modifier titre et synopsis{{end}}
         </summary>
         <form class="stack edit-form" hx-post="/ui/media/{{$m.ID}}/details"
               hx-target="#details-result" hx-swap="innerHTML">
@@ -69,9 +72,8 @@
             </button>
             {{end}}
           </div>
-          <p class="muted small">
-            Le titre est déduit du dossier et du nom de fichier. Dès que vous le
-            modifiez, plus rien ne l'écrase.
+          <p class="hint">
+            Titre déduit du nom de fichier. Une fois modifié, rien ne l'écrase.
           </p>
           <div id="details-result"></div>
         </form>
@@ -82,21 +84,20 @@
         <div class="alert alert-error stack">
           <div>
             <strong>
-              {{if .Permanent}}Ce fichier n'est pas lisible.
-              {{else if .WillRetry}}L'analyse a échoué, une nouvelle tentative est prévue.
-              {{else}}L'analyse a échoué {{.Attempts}} fois, abandon.{{end}}
+              {{if .Permanent}}Fichier illisible.
+              {{else if .WillRetry}}Analyse échouée, nouvelle tentative prévue.
+              {{else}}Analyse échouée {{.Attempts}} fois, abandon.{{end}}
             </strong>
             <p>{{.Message}}</p>
             {{if .Permanent}}
-              <p class="muted small">
-                Le fichier lui-même pose problème (format non reconnu, pas de
-                piste vidéo, fichier tronqué). Réessayer ne changera rien.
+              <p class="hint">
+                Format inconnu, pas de piste vidéo ou fichier tronqué. Réessayer
+                ne changera rien.
               </p>
             {{else if .WillRetry}}
-              <p class="muted small">
-                Tentative {{.Attempts}} sur {{.MaxAttempts}}.
-                {{with .NextAttempt}}Prochaine vers {{.Local.Format "15:04"}}.{{end}}
-                Les erreurs réseau, elles, finissent souvent par se résoudre.
+              <p class="hint">
+                Tentative {{.Attempts}} sur {{.MaxAttempts}}{{with .NextAttempt}}, prochaine vers {{.Local.Format "15:04"}}{{end}}.
+                Une coupure réseau se résout souvent seule.
               </p>
             {{end}}
           </div>
@@ -121,7 +122,7 @@
       {{end}}
 
       {{if eq $m.Status "ready"}}
-      <form class="play-form stack" action="/watch/{{$m.ID}}" method="get" hx-boost="false">
+      <form class="play-form panel stack" action="/watch/{{$m.ID}}" method="get" hx-boost="false">
         <div class="form-grid">
           <label class="field">
             <span class="field-label">Qualité</span>
@@ -135,9 +136,7 @@
                 <option>{{.Label}}</option>
               </select>
               {{end}}
-              <span id="quality-note" class="muted small">
-                Résolution native du fichier, rien à choisir.
-              </span>
+              <span id="quality-note" class="hint">Résolution native, rien à choisir.</span>
             {{else}}
               <select name="quality">
                 {{range .Qualities}}
@@ -176,6 +175,10 @@
           {{end}}
         </div>
 
+        <div class="play-state">
+          {{template "watch_toggle.html" dict "ID" $m.ID "Watched" .Watched "Compact" false}}
+        </div>
+
         <div class="actions">
           {{if .ResumeAt}}
           <button type="submit" name="t" value="{{.ResumeAt}}" class="btn btn-primary w-full-mobile"
@@ -208,10 +211,10 @@
             <dt>Durée</dt><dd>{{duration (deref64 $m.DurationSec)}}</dd>
             <dt>Segments</dt><dd>{{.SegmentCount}}</dd>
           {{else}}
-            <dt>Résolution source</dt><dd class="muted">en attente d'analyse</dd>
-            <dt>Images par seconde</dt><dd class="muted">en attente d'analyse</dd>
-            <dt>Durée</dt><dd class="muted">en attente d'analyse</dd>
-            <dt>Segments</dt><dd class="muted">en attente d'analyse</dd>
+            <dt>Résolution source</dt><dd class="muted">à analyser</dd>
+            <dt>Images par seconde</dt><dd class="muted">à analyser</dd>
+            <dt>Durée</dt><dd class="muted">à analyser</dd>
+            <dt>Segments</dt><dd class="muted">à analyser</dd>
           {{end}}
           <dt>Statut</dt><dd>{{statusLabel $m.Status}}</dd>
         </dl>

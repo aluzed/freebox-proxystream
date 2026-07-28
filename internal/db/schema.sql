@@ -62,6 +62,10 @@ CREATE INDEX IF NOT EXISTS idx_media_status ON media(status);
 CREATE TABLE IF NOT EXISTS playback_progress (
   media_id      INTEGER PRIMARY KEY REFERENCES media(id) ON DELETE CASCADE,
   position_sec  REAL NOT NULL,
+  -- Set once playback passes the threshold, and by hand from the checkbox.
+  -- Stored rather than derived from position_sec: unticking it has to survive,
+  -- which a rule reading only the position could never express.
+  watched       INTEGER NOT NULL DEFAULT 0,
   updated_at    DATETIME NOT NULL
 );
 

@@ -172,6 +172,9 @@ type DirEntry struct {
 	Name  string `json:"name"`
 	Path  string `json:"path"` // relative to the library root, no leading slash
 	Count int    `json:"count"`
+	// Watched is how many of those Count items are marked seen, so a folder
+	// can say where you are in it without being opened.
+	Watched int `json:"watched"`
 	// CoverMediaID is a representative item whose frame stands in for the
 	// folder.
 	CoverMediaID int64 `json:"cover_media_id,omitempty"`
@@ -194,6 +197,14 @@ func (s *Store) BrowseLibrary(ctx context.Context, lib *Library, rel string) ([]
 	}
 	prefix += "/"
 
+	// Read before the cursor below is opened: the pool is four connections
+	// wide and a query nested inside an open rows loop would compete with the
+	// scanner for one of them.
+	seenFlags, err := s.WatchedCounts(ctx, lib.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+mediaCols+` FROM media
 		 WHERE library_id = ? AND ftp_path LIKE ? ESCAPE '\'
@@ -206,6 +217,7 @@ func (s *Store) BrowseLibrary(ctx context.Context, lib *Library, rel string) ([]
 
 	type folder struct {
 		count   int
+		watched int
 		coverID int64
 	}
 	dirs := map[string]*folder{}
@@ -232,6 +244,9 @@ func (s *Store) BrowseLibrary(ctx context.Context, lib *Library, rel string) ([]
 			order = append(order, name)
 		}
 		f.count++
+		if seenFlags[m.ID] {
+			f.watched++
+		}
 
 		// Every media can produce a frame, so the first one is as good a
 		// cover as any.
@@ -257,6 +272,7 @@ func (s *Store) BrowseLibrary(ctx context.Context, lib *Library, rel string) ([]
 			Name:         name,
 			Path:         child,
 			Count:        f.count,
+			Watched:      f.watched,
 			CoverMediaID: f.coverID,
 		})
 	}
@@ -640,23 +656,105 @@ func (s *Store) PendingProbes(ctx context.Context, limit int) ([]int64, error) {
 
 // ---------- progress ----------
 
-func (s *Store) SaveProgress(ctx context.Context, mediaID int64, pos float64) error {
+// SaveProgress records a playback position. watchedFrom is the position past
+// which the file counts as seen, or 0 when its duration is unknown.
+//
+// The flag is raised on the crossing, not on the position: the player reports
+// where it is every ten seconds, so a rule reading "past the mark" alone would
+// tick the box straight back on after someone unticked it at the end credits.
+// Comparing against the previously stored position makes the ping that crosses
+// the line the only one that raises it.
+func (s *Store) SaveProgress(ctx context.Context, mediaID int64, pos, watchedFrom float64) error {
+	crossed := watchedFrom > 0 && pos >= watchedFrom
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO playback_progress (media_id, position_sec, updated_at) VALUES (?, ?, ?)
-		 ON CONFLICT(media_id) DO UPDATE SET position_sec = excluded.position_sec, updated_at = excluded.updated_at`,
-		mediaID, pos, time.Now().UTC())
+		`INSERT INTO playback_progress (media_id, position_sec, watched, updated_at) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(media_id) DO UPDATE SET
+		   position_sec = excluded.position_sec,
+		   watched = CASE
+		     WHEN excluded.watched = 1 AND playback_progress.position_sec < ? THEN 1
+		     ELSE playback_progress.watched END,
+		   updated_at = excluded.updated_at`,
+		mediaID, pos, crossed, time.Now().UTC(), watchedFrom)
+	return err
+}
+
+// SetWatched is the checkbox: it decides the flag outright, in both directions,
+// and leaves the position alone so a film marked seen can still be resumed.
+func (s *Store) SetWatched(ctx context.Context, mediaID int64, watched bool) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO playback_progress (media_id, position_sec, watched, updated_at) VALUES (?, 0, ?, ?)
+		 ON CONFLICT(media_id) DO UPDATE SET watched = excluded.watched, updated_at = excluded.updated_at`,
+		mediaID, watched, time.Now().UTC())
 	return err
 }
 
 func (s *Store) GetProgress(ctx context.Context, mediaID int64) (*Progress, error) {
 	var p Progress
 	err := s.db.QueryRowContext(ctx,
-		`SELECT media_id, position_sec, updated_at FROM playback_progress WHERE media_id = ?`, mediaID).
-		Scan(&p.MediaID, &p.PositionSec, &p.UpdatedAt)
+		`SELECT media_id, position_sec, watched, updated_at FROM playback_progress WHERE media_id = ?`, mediaID).
+		Scan(&p.MediaID, &p.PositionSec, &p.Watched, &p.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return &p, err
+}
+
+// ProgressFor answers for a whole list at once. Every grid and episode list
+// needs the state of each of its rows, and one query per row put a round trip
+// between the page and every tile on it.
+func (s *Store) ProgressFor(ctx context.Context, mediaIDs []int64) (map[int64]Progress, error) {
+	out := make(map[int64]Progress, len(mediaIDs))
+	if len(mediaIDs) == 0 {
+		return out, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(mediaIDs)), ",")
+	args := make([]any, len(mediaIDs))
+	for i, id := range mediaIDs {
+		args[i] = id
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT media_id, position_sec, watched, updated_at FROM playback_progress
+		 WHERE media_id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var p Progress
+		if err := rows.Scan(&p.MediaID, &p.PositionSec, &p.Watched, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out[p.MediaID] = p
+	}
+	return out, rows.Err()
+}
+
+// WatchedCounts reports, per directory prefix, how many of a library's ready
+// media are marked seen. A folder card can then say 4/10 without the caller
+// loading every file it contains.
+func (s *Store) WatchedCounts(ctx context.Context, libraryID int64) (map[int64]bool, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT m.id, COALESCE(p.watched, 0) FROM media m
+		 LEFT JOIN playback_progress p ON p.media_id = m.id
+		 WHERE m.library_id = ?`, libraryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		var watched bool
+		if err := rows.Scan(&id, &watched); err != nil {
+			return nil, err
+		}
+		out[id] = watched
+	}
+	return out, rows.Err()
 }
 
 // ---------- segment cache ----------

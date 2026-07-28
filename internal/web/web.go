@@ -72,6 +72,7 @@ var funcs = template.FuncMap{
 	"deref64":     Deref64,
 	"derefStr":    DerefStr,
 	"add":         func(a, b int) int { return a + b },
+	"seq":         func(n int) []struct{} { return make([]struct{}, n) },
 	"dict":        Dict,
 	"parentDir":   func(p string) string { return path.Dir(p) },
 }

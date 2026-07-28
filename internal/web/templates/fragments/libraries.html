@@ -1,6 +1,10 @@
 {{define "libraries.html"}}
 {{if not .Libraries}}
-  <p class="muted">Aucune bibliothèque pour le moment.</p>
+  <div class="empty">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 12v5"/><path d="M9.5 14.5h5"/></svg>
+    <p><strong>Aucune bibliothèque.</strong></p>
+    <p class="muted">Choisissez un dossier FTP ci-dessous.</p>
+  </div>
 {{else}}
 <ul class="library-list">
   {{range .Libraries}}
@@ -22,7 +26,9 @@
       <button type="button" class="btn btn-outline w-full-mobile"
               title="Réassocier les titres et affiches sans relire les fichiers"
               hx-post="/ui/libraries/{{.ID}}/refresh" hx-swap="none">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M4 10a8 8 0 0 1 14-3l2 3"/><path d="M20 14a8 8 0 0 1-14 3l-2-3"/></svg>
+        {{/* An étiquette, not a second circular arrow: this button sat next to
+             "Analyser" wearing almost the same icon. */}}
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h9z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>
         <span>Réassocier les métadonnées</span>
       </button>
       <button type="button" class="btn btn-outline btn-danger-outline w-full-mobile"

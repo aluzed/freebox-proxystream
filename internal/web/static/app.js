@@ -177,6 +177,28 @@ window.addEventListener('pageshow', () => {
   document.querySelectorAll('.btn.is-busy').forEach((b) => b.classList.remove('is-busy'));
 });
 
+// ---------- seen checkbox ----------
+
+// The tick is drawn by the browser before the request is answered, which is
+// what makes it feel instant. The price is that a failed save leaves the page
+// claiming something the database never recorded, so put the tick back.
+function watchedInput(event) {
+  const el = event.detail && event.detail.elt;
+  return el instanceof HTMLInputElement && el.name === 'watched' ? el : null;
+}
+
+document.body.addEventListener('htmx:beforeRequest', (event) => {
+  const input = watchedInput(event);
+  if (input) input.closest('.watch-toggle').classList.add('is-busy');
+});
+
+document.body.addEventListener('htmx:afterRequest', (event) => {
+  const input = watchedInput(event);
+  if (!input) return;
+  input.closest('.watch-toggle').classList.remove('is-busy');
+  if (!event.detail.successful) input.checked = !input.checked;
+});
+
 // ---------- failures ----------
 
 document.body.addEventListener('htmx:responseError', (event) => {

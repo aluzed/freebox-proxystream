@@ -1,8 +1,11 @@
 {{define "content"}}
 <div class="auth-shell">
   <form class="panel stack auth-card" method="post" action="/login">
-    <h1>Proxystream</h1>
-    <p class="muted">Connectez-vous pour accéder à votre bibliothèque.</p>
+    <div class="auth-brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H4z"/><path d="M9 20h6"/></svg>
+      <h1>Proxystream</h1>
+    </div>
+    <p class="hint">Connectez-vous pour accéder à votre bibliothèque.</p>
 
     {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
 

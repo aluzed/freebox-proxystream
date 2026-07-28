@@ -20,13 +20,20 @@
     <input type="hidden" name="library_id" value="{{.LibraryID}}">
     <input type="hidden" name="path" value="{{.Path}}">
   </form>
-  <p class="muted small">
-    La recherche parcourt toute la bibliothèque ; la navigation ci-dessous suit
-    l'arborescence de vos dossiers.
-  </p>
+  <p class="hint">Recherche globale. En dessous, vos dossiers tels quels.</p>
 
   <div id="media-grid" hx-get="/ui/media{{.InitialQuery}}" hx-trigger="load" hx-swap="outerHTML">
-    <p class="muted">Chargement…</p>
+    {{/* The shape of what is coming rather than the word "chargement": the grid
+         stops jumping into place once the answer lands. */}}
+    <ul class="skeleton-grid" aria-hidden="true">
+      {{range seq 8}}
+      <li class="skeleton-card">
+        <div class="skeleton skeleton-poster"></div>
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line is-short"></div>
+      </li>
+      {{end}}
+    </ul>
   </div>
 </div>
 {{end}}

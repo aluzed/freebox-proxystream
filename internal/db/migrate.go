@@ -46,6 +46,14 @@ var migrations = []migration{
 		applied: hasColumn("media", "error_permanent"),
 		apply:   `ALTER TABLE media ADD COLUMN error_permanent INTEGER NOT NULL DEFAULT 0`,
 	},
+	{
+		// Existing rows keep 0: a base built before this column has no way to
+		// tell an unwatched file from one watched before the flag existed, and
+		// guessing from position_sec would mark half a library as seen.
+		name:    "playback_progress.watched",
+		applied: hasColumn("playback_progress", "watched"),
+		apply:   `ALTER TABLE playback_progress ADD COLUMN watched INTEGER NOT NULL DEFAULT 0`,
+	},
 }
 
 func hasColumn(table, column string) func(*sql.DB) (bool, error) {

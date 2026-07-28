@@ -151,11 +151,12 @@ func (s *Server) pageDetail(w http.ResponseWriter, r *http.Request) {
 	view := s.mediaView(r, m)
 
 	// Offer a resume only when it is genuinely mid-film: not in the opening
-	// seconds, not in the closing minute.
+	// seconds, not once it counts as finished.
 	var resumeAt float64
-	if view.Progress != nil && m.DurationSec != nil {
-		p := view.Progress.PositionSec
-		if p > 30 && p < *m.DurationSec-60 {
+	watched := false
+	if view.Progress != nil {
+		watched = view.Progress.Watched
+		if p := view.Progress.PositionSec; p > 30 && !reachedEnd(p, m.DurationSec) {
 			resumeAt = p
 		}
 	}
@@ -182,6 +183,7 @@ func (s *Server) pageDetail(w http.ResponseWriter, r *http.Request) {
 		"SegmentCount":  view.SegmentCount,
 		"EncoderLog":    view.EncoderLog,
 		"ResumeAt":      resumeAt,
+		"Watched":       watched,
 		"Probing":       s.probingData(m),
 		"Failure":       s.failureData(r, m),
 	})
@@ -391,8 +393,12 @@ func (s *Server) fragMediaGrid(w http.ResponseWriter, r *http.Request) {
 			fail()
 			return
 		}
-		s.renderFragment(w, r, "media_grid", s.gridData(r, map[string]any{
-			"Search": true, "Query": query, "Files": items, "Total": total}))
+		data := s.gridData(r, map[string]any{
+			"Search": true, "Query": query, "Files": items, "Total": total})
+		// After gridData: it reads Files as []db.Media to decide whether the
+		// grid still needs to poll.
+		data["Files"] = s.tileRows(r, items)
+		s.renderFragment(w, r, "media_grid", data)
 		return
 	}
 
@@ -427,6 +433,7 @@ func (s *Server) fragMediaGrid(w http.ResponseWriter, r *http.Request) {
 	if looksLikeEpisodes(files) {
 		data["Episodes"] = s.episodeRows(r, files)
 	}
+	data["Files"] = s.tileRows(r, files)
 	s.renderFragment(w, r, "media_grid", data)
 }
 
@@ -481,6 +488,81 @@ func (s *Server) gridData(r *http.Request, data map[string]any) map[string]any {
 	return data
 }
 
+// WatchedFraction is how much of a file has to have played for it to count as
+// seen. Credits, a trailing black frame or a stray extra minute in the
+// container all mean the last percent is rarely reached, so the bar sits below
+// the end rather than at it.
+const WatchedFraction = 0.94
+
+// watchedFrom is the position past which a file counts as seen, or 0 when its
+// duration is unknown: nothing is known, so nothing is claimed.
+func watchedFrom(duration *float64) float64 {
+	if duration == nil || *duration <= 0 {
+		return 0
+	}
+	return *duration * WatchedFraction
+}
+
+func reachedEnd(pos float64, duration *float64) bool {
+	mark := watchedFrom(duration)
+	return mark > 0 && pos >= mark
+}
+
+// watchState is the playback state of one item as a list shows it. Both the
+// tile grid and the episode list carry it, so the two read the same.
+type watchState struct {
+	Progress float64
+	Percent  int
+	Watched  bool
+}
+
+func stateFrom(p db.Progress, duration float64) watchState {
+	st := watchState{Progress: p.PositionSec, Watched: p.Watched}
+	if duration > 0 {
+		st.Percent = min(int(p.PositionSec*100/duration), 100)
+	}
+	return st
+}
+
+// progressFor loads the playback state of a whole list in one query. Falling
+// back to an empty map on error keeps a list rendering: a missing tick is a
+// smaller failure than a page that will not draw.
+func (s *Server) progressFor(r *http.Request, files []db.Media) map[int64]db.Progress {
+	ids := make([]int64, len(files))
+	for i, m := range files {
+		ids[i] = m.ID
+	}
+	got, err := s.store.ProgressFor(r.Context(), ids)
+	if err != nil {
+		return map[int64]db.Progress{}
+	}
+	return got
+}
+
+// tileRow is one card in the poster grid. The media alone was enough while
+// tiles said nothing about playback.
+type tileRow struct {
+	Media db.Media
+	watchState
+}
+
+func (s *Server) tileRows(r *http.Request, files []db.Media) []tileRow {
+	seen := s.progressFor(r, files)
+	out := make([]tileRow, 0, len(files))
+	for _, m := range files {
+		row := tileRow{Media: m}
+		if p, ok := seen[m.ID]; ok {
+			var duration float64
+			if m.DurationSec != nil {
+				duration = *m.DurationSec
+			}
+			row.watchState = stateFrom(p, duration)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
 // episodeRow is one line in an episode list: the poster grid is the wrong
 // shape for twenty near-identical thumbnails whose titles differ only in the
 // episode number.
@@ -489,12 +571,11 @@ type episodeRow struct {
 	Label    string
 	Title    string
 	Duration float64
-	Progress float64
-	Percent  int
-	Watched  bool
+	watchState
 }
 
 func (s *Server) episodeRows(r *http.Request, files []db.Media) []episodeRow {
+	seen := s.progressFor(r, files)
 	out := make([]episodeRow, 0, len(files))
 	for _, m := range files {
 		row := episodeRow{Media: m, Title: m.DisplayTitle(), Label: episodeLabel(m)}
@@ -509,14 +590,8 @@ func (s *Server) episodeRows(r *http.Request, files []db.Media) []episodeRow {
 		if m.DurationSec != nil {
 			row.Duration = *m.DurationSec
 		}
-
-		if p, err := s.store.GetProgress(r.Context(), m.ID); err == nil && p != nil {
-			row.Progress = p.PositionSec
-			if row.Duration > 0 {
-				row.Percent = int(p.PositionSec * 100 / row.Duration)
-				// The last minute counts as finished, not as 97%.
-				row.Watched = p.PositionSec >= row.Duration-60
-			}
+		if p, ok := seen[m.ID]; ok {
+			row.watchState = stateFrom(p, row.Duration)
 		}
 		out = append(out, row)
 	}
@@ -570,6 +645,37 @@ func (s *Server) fragRetryProbe(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("probe retry requested", "media_id", m.ID)
 	toast(w, "success", "Analyse relancée, ce fichier repasse en tête de file.", true)
 	w.Header().Set("HX-Refresh", "true")
+	w.WriteHeader(http.StatusOK)
+}
+
+// fragToggleWatched is the seen checkbox. It answers with no body at all: the
+// browser has already drawn the new tick, so swapping anything back would make
+// the control flicker between two states that agree. htmx omits an unchecked
+// box from the request, which is what says "not seen" here.
+func (s *Server) fragToggleWatched(w http.ResponseWriter, r *http.Request) {
+	m, ok := s.loadMedia(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		toast(w, "error", "Formulaire invalide.", false)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	watched := r.FormValue("watched") != ""
+	if err := s.store.SetWatched(r.Context(), m.ID, watched); err != nil {
+		// The tick the browser drew is now a lie: say so, and let the caller
+		// put it back.
+		s.log.Error("could not save watched flag", "media_id", m.ID, "err", err)
+		toast(w, "error", "Statut non enregistré.", false)
+		w.Header().Set("HX-Reswap", "none")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// No toast on success. The tick is the confirmation, and one notification
+	// per checkbox in a list of twenty episodes is noise, not feedback.
 	w.WriteHeader(http.StatusOK)
 }
 

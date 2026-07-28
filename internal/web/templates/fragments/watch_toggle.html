@@ -1,0 +1,18 @@
+{{define "watch_toggle.html"}}
+{{/* One control, three places. It posts on change and swaps nothing back: the
+     browser has already drawn the tick, and every "seen" style on the page is
+     driven off :checked in CSS, so the whole card updates before the request
+     even leaves.
+
+     The label never changes. It names what the box means, and the box says yes
+     or no: a label that read "Pas vu" beside an empty box would ask to be
+     ticked in order to become unseen. */}}
+<label class="watch-toggle{{if .Compact}} is-compact{{end}}" title="Déjà vu">
+  <input type="checkbox" name="watched"{{if .Watched}} checked{{end}}
+         hx-post="/ui/media/{{.ID}}/watched" hx-trigger="change" hx-swap="none">
+  <span class="watch-box" aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></svg>
+  </span>
+  <span class="watch-label">Déjà vu</span>
+</label>
+{{end}}

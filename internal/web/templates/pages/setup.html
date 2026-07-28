@@ -2,9 +2,9 @@
 <div class="auth-shell">
   <form class="panel stack auth-card" method="post" action="/setup">
     <h1>Premier démarrage</h1>
-    <p class="muted">
-      Créez le compte administrateur. Le mot de passe est stocké haché (bcrypt)
-      dans la base SQLite, jamais en clair et jamais dans un fichier de configuration.
+    <p class="hint">
+      Créez le compte administrateur. Mot de passe haché (bcrypt) en base,
+      jamais en clair.
     </p>
 
     {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}

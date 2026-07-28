@@ -303,7 +303,7 @@ func TestAllPagesRender(t *testing.T) {
 	if err := env.store.SetMediaStatus(ctx, mediaID, db.StatusReady, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.store.SaveProgress(ctx, mediaID, 1800); err != nil {
+	if err := env.store.SaveProgress(ctx, mediaID, 1800, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -497,6 +497,85 @@ func TestProgressRoundTrip(t *testing.T) {
 	}
 	if view.SegmentCount != 900 {
 		t.Errorf("segment count = %d, want 900", view.SegmentCount)
+	}
+}
+
+// The seen flag has two ways in, and the one that is written by hand has to
+// survive the one that fires on its own ten seconds later.
+func TestWatchedFlag(t *testing.T) {
+	env := newEnv(t)
+	env.signUp(t)
+	ctx := context.Background()
+
+	lib, _ := env.store.CreateLibrary(ctx, "/Films", "Films", db.KindMovie)
+	id, _, _ := env.store.UpsertMediaFile(ctx, lib.ID, "/Films/x.mkv", 1<<30, time.Now().UTC())
+	env.store.SaveProbe(ctx, id, db.ProbeResult{
+		DurationSec: 1000, VideoCodec: "h264", Width: 1920, Height: 1080, FPS: 25,
+		Audio: []db.AudioStream{{AudioIndex: 0, Codec: "aac", Channels: 2}},
+	})
+	env.store.SetMediaStatus(ctx, id, db.StatusReady, "")
+
+	watched := func() bool {
+		t.Helper()
+		p, err := env.store.GetProgress(ctx, id)
+		if err != nil || p == nil {
+			return false
+		}
+		return p.Watched
+	}
+	report := func(pos string) {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodPut, env.srv.URL+"/api/media/1/progress",
+			strings.NewReader(`{"position_sec": `+pos+`}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := env.client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+
+	// Below the threshold, nothing is claimed.
+	report("930")
+	if watched() {
+		t.Error("93% counted as watched")
+	}
+
+	// At the threshold it marks itself.
+	report("940")
+	if !watched() {
+		t.Error("94% did not count as watched")
+	}
+
+	// The checkbox wins, in both directions. htmx leaves the field out
+	// entirely when the box is unticked.
+	resp := env.postForm(t, "/ui/media/1/watched", url.Values{})
+	resp.Body.Close()
+	if watched() {
+		t.Fatal("unticking the checkbox did not clear the flag")
+	}
+
+	// And the next position report, still sitting past the end, must not undo
+	// that: the player pings every ten seconds.
+	report("999")
+	if watched() {
+		t.Error("a progress ping re-ticked a file marked unseen by hand")
+	}
+
+	resp = env.postForm(t, "/ui/media/1/watched", url.Values{"watched": {"on"}})
+	resp.Body.Close()
+	if !watched() {
+		t.Error("ticking the checkbox did not set the flag")
+	}
+
+	// A file marked seen by hand keeps its position, so it can still be resumed.
+	if p, _ := env.store.GetProgress(ctx, id); p == nil || p.PositionSec != 999 {
+		t.Errorf("the checkbox moved the playback position: %+v", p)
+	}
+
+	// The detail page renders the state it stored.
+	if page := body(t, env.get(t, "/media/1")); !strings.Contains(page, "checked") {
+		t.Error("the detail page does not show the file as seen")
 	}
 }
 
@@ -1181,7 +1260,7 @@ func TestStatusBreaksProgressDownPerLibrary(t *testing.T) {
 	env.store.UpsertMediaFile(ctx, series.ID, "/Series/b.mkv", 1<<30, time.Now().UTC())
 
 	panel := body(t, env.get(t, "/ui/status"))
-	for _, want := range []string{"Films", "Series", "1 / 1", "0 / 1", "en attente d'analyse"} {
+	for _, want := range []string{"Films", "Series", "1 / 1", "0 / 1", "à analyser"} {
 		if !strings.Contains(panel, want) {
 			t.Errorf("status panel missing %q:\n%s", want, panel)
 		}
@@ -1231,7 +1310,7 @@ func TestFailureStatesAreDistinguished(t *testing.T) {
 	env.store.RecordProbeFailure(ctx, broken, "no video stream in this file", true)
 
 	page := body(t, env.get(t, "/media/1"))
-	if !strings.Contains(page, "nouvelle tentative est prévue") {
+	if !strings.Contains(page, "nouvelle tentative prévue") {
 		t.Errorf("a transient failure does not announce a retry:\n%s", page)
 	}
 	if !strings.Contains(page, "Relancer l'analyse") {
@@ -1239,10 +1318,10 @@ func TestFailureStatesAreDistinguished(t *testing.T) {
 	}
 
 	page = body(t, env.get(t, "/media/2"))
-	if !strings.Contains(page, "n'est pas lisible") {
+	if !strings.Contains(page, "Fichier illisible") {
 		t.Errorf("a permanent failure is not stated plainly:\n%s", page)
 	}
-	if strings.Contains(page, "nouvelle tentative est prévue") {
+	if strings.Contains(page, "nouvelle tentative prévue") {
 		t.Error("a permanent failure promises a retry that will never come")
 	}
 
@@ -1291,9 +1370,9 @@ func TestSeasonFolderRendersAsAnEpisodeList(t *testing.T) {
 		})
 		env.store.SetMediaStatus(ctx, id, db.StatusReady, "")
 	}
-	// Half-watched, and one finished.
-	env.store.SaveProgress(ctx, firstID, 750)
-	env.store.SaveProgress(ctx, firstID+1, 1490)
+	// Half-watched, and one played past the threshold.
+	env.store.SaveProgress(ctx, firstID, 750, 0)
+	env.store.SaveProgress(ctx, firstID+1, 1490, 1500*api.WatchedFraction)
 
 	listing := body(t, env.get(t, "/ui/media?library_id="+
 		strconv.FormatInt(lib.ID, 10)+"&path=Kaamelott%2FSaison+3"))
@@ -1304,10 +1383,15 @@ func TestSeasonFolderRendersAsAnEpisodeList(t *testing.T) {
 	if strings.Contains(listing, `class="grid"`) {
 		t.Error("the poster grid is still being used for episodes")
 	}
-	for _, want := range []string{"S03E01", "S03E04", "repris à", "vu"} {
+	for _, want := range []string{"S03E01", "S03E04", "repris à"} {
 		if !strings.Contains(listing, want) {
 			t.Errorf("episode list missing %q", want)
 		}
+	}
+	// One episode is ticked and one is not: both words ship on every row, so
+	// only the checked attribute distinguishes them.
+	if got := strings.Count(listing, "checked"); got != 1 {
+		t.Errorf("expected exactly one episode ticked as seen, found %d", got)
 	}
 	// The label already carries the numbering, so it is not repeated in the title.
 	if strings.Contains(listing, "Kaamelott - S03E01 - ") {

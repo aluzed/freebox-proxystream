@@ -1,7 +1,9 @@
 {{define "episode_list.html"}}
 <ul class="episodes">
   {{range .}}
-  <li class="episode{{if .Watched}} is-watched{{end}}">
+  {{/* No is-watched class: the state has to follow the checkbox without a
+       round trip, so CSS reads :checked instead. */}}
+  <li class="episode">
     <a class="episode-link" href="/media/{{.Media.ID}}">
       <div class="episode-thumb">
         <img src="/api/media/{{.Media.ID}}/poster" alt="" loading="lazy"
@@ -9,9 +11,12 @@
         <div class="poster-placeholder" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="m9 9 6 3-6 3z"/></svg>
         </div>
+        <span class="seen-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></svg>
+        </span>
         {{if gt .Percent 0}}
         <span class="episode-progress" aria-hidden="true">
-          <span style="width:{{if .Watched}}100{{else}}{{.Percent}}{{end}}%"></span>
+          <span style="width:{{.Percent}}%"></span>
         </span>
         {{end}}
       </div>
@@ -23,15 +28,16 @@
         </div>
         <div class="episode-meta muted small">
           {{if gt .Duration 0.0}}{{duration .Duration}}{{end}}
-          {{if .Watched}} · vu
-          {{else if gt .Percent 0}} · repris à {{duration .Progress}}{{end}}
+          {{if and (gt .Percent 0) (not .Watched)}} · repris à {{duration .Progress}}{{end}}
           {{if eq .Media.Status "error"}} · <span class="text-danger">erreur</span>
-          {{else if ne .Media.Status "ready"}} · en attente d'analyse{{end}}
+          {{else if ne .Media.Status "ready"}} · à analyser{{end}}
         </div>
       </div>
 
       <svg class="icon episode-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
     </a>
+    {{/* Outside the anchor: the row opens the episode, the checkbox marks it. */}}
+    {{template "watch_toggle.html" dict "ID" .Media.ID "Watched" .Watched "Compact" false}}
   </li>
   {{end}}
 </ul>

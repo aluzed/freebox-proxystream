@@ -121,5 +121,6 @@ func unmarshalSubs(s *string) []SubStream {
 type Progress struct {
 	MediaID     int64     `json:"media_id"`
 	PositionSec float64   `json:"position_sec"`
+	Watched     bool      `json:"watched"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
