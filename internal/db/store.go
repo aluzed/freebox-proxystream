@@ -338,42 +338,80 @@ func (s *Store) UpsertMediaFile(ctx context.Context, libraryID int64, ftpPath st
 	return id, needsProbe, err
 }
 
-// MarkMissing flags rows of a library whose file was not seen by the last scan.
-// Rows are never deleted silently.
-func (s *Store) MarkMissing(ctx context.Context, libraryID int64, seen []string) (int, error) {
+// DeleteMissing drops the rows of a library whose file was not seen by the
+// last scan, folders included: a folder is only ever the shared prefix of the
+// media under it, so removing the rows removes it from the browser too.
+//
+// unreadable lists the directories the walk could not list. Anything below one
+// of them is left alone: an FTP hiccup on a single directory must not read as
+// a mass deletion. Returns the ids removed, so their generated files can go
+// with them.
+func (s *Store) DeleteMissing(ctx context.Context, libraryID int64, seen, unreadable []string) ([]int64, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx, `CREATE TEMP TABLE IF NOT EXISTS scan_seen (ftp_path TEXT PRIMARY KEY)`); err != nil {
-		return 0, err
+		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM scan_seen`); err != nil {
-		return 0, err
+		return nil, err
 	}
 	stmt, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO scan_seen (ftp_path) VALUES (?)`)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	for _, p := range seen {
 		if _, err := stmt.ExecContext(ctx, p); err != nil {
 			stmt.Close()
-			return 0, err
+			return nil, err
 		}
 	}
 	stmt.Close()
 
-	res, err := tx.ExecContext(ctx,
-		`UPDATE media SET status = ?, error_msg = 'file disappeared from FTP during scan'
-		 WHERE library_id = ? AND status != ? AND ftp_path NOT IN (SELECT ftp_path FROM scan_seen)`,
-		StatusError, libraryID, StatusError)
-	if err != nil {
-		return 0, err
+	q := `SELECT id FROM media
+	      WHERE library_id = ? AND ftp_path NOT IN (SELECT ftp_path FROM scan_seen)`
+	args := []any{libraryID}
+	for _, dir := range unreadable {
+		q += ` AND ftp_path NOT LIKE ? ESCAPE '\'`
+		args = append(args, escapeLike(strings.TrimSuffix(dir, "/"))+`/%`)
 	}
-	n, _ := res.RowsAffected()
-	return int(n), tx.Commit()
+
+	rows, err := tx.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, tx.Commit()
+	}
+
+	// Progress and cached segments follow through ON DELETE CASCADE.
+	del, err := tx.PrepareContext(ctx, `DELETE FROM media WHERE id = ?`)
+	if err != nil {
+		return nil, err
+	}
+	defer del.Close()
+	for _, id := range ids {
+		if _, err := del.ExecContext(ctx, id); err != nil {
+			return nil, err
+		}
+	}
+	return ids, tx.Commit()
 }
 
 // RecordProbeFailure stores the outcome and schedules the next attempt. A

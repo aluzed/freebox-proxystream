@@ -8,8 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path"
+	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -272,7 +275,7 @@ func (s *Scanner) scanLibrary(ctx context.Context, libraryID int64) error {
 
 	s.log.Info("library scan started", "library_id", lib.ID, "path", lib.FTPPath)
 
-	files, err := s.walk(ctx, lib.FTPPath, 0)
+	files, unreadable, err := s.walk(ctx, lib.FTPPath, 0)
 	if err != nil {
 		return fmt.Errorf("walk %s: %w", lib.FTPPath, err)
 	}
@@ -297,17 +300,40 @@ func (s *Scanner) scanLibrary(ctx context.Context, libraryID int64) error {
 		_ = mediaID
 	}
 
-	missing, err := s.store.MarkMissing(ctx, lib.ID, seen)
-	if err != nil {
-		s.log.Warn("marking missing files failed", "library_id", lib.ID, "err", err)
+	if len(unreadable) > 0 {
+		s.log.Warn("some directories could not be listed, nothing below them was removed",
+			"library_id", lib.ID, "dirs", len(unreadable))
 	}
+	removed, err := s.store.DeleteMissing(ctx, lib.ID, seen, unreadable)
+	if err != nil {
+		s.log.Warn("removing deleted files failed", "library_id", lib.ID, "err", err)
+	}
+	for _, id := range removed {
+		s.dropDerived(id)
+	}
+
 	if err := s.store.TouchLibraryScan(ctx, lib.ID); err != nil {
 		s.log.Warn("could not record scan time", "library_id", lib.ID, "err", err)
 	}
 
 	s.log.Info("library scan finished",
-		"library_id", lib.ID, "files", len(files), "to_probe", newCount, "missing", missing)
+		"library_id", lib.ID, "files", len(files), "to_probe", newCount, "removed", len(removed))
 	return nil
+}
+
+// dropDerived deletes what was generated from a file that no longer exists.
+// The database rows go with the media through ON DELETE CASCADE; these files
+// have no owner left once the row is gone.
+func (s *Scanner) dropDerived(mediaID int64) {
+	if s.thumbs != nil {
+		if err := s.thumbs.Remove(mediaID); err != nil {
+			s.log.Debug("could not remove thumbnail", "media_id", mediaID, "err", err)
+		}
+	}
+	dir := filepath.Join(s.cfg.CacheDir, strconv.FormatInt(mediaID, 10))
+	if err := os.RemoveAll(dir); err != nil {
+		s.log.Debug("could not remove cached segments", "media_id", mediaID, "err", err)
+	}
 }
 
 // refreshMetadata re-derives titles across an already-probed library. Used
@@ -354,28 +380,35 @@ func (s *Scanner) refreshMetadata(ctx context.Context, libraryID int64) error {
 	return nil
 }
 
-func (s *Scanner) walk(ctx context.Context, dir string, depth int) ([]ftpclient.Entry, error) {
+// walk returns the video files below dir, and the directories it could not
+// look inside. The second list is what keeps a failed listing from being taken
+// for a deletion: the caller leaves everything below those paths untouched.
+func (s *Scanner) walk(ctx context.Context, dir string, depth int) ([]ftpclient.Entry, []string, error) {
 	if depth > maxDepth {
-		return nil, nil
+		// Not read, so not known to be gone either.
+		return nil, []string{dir}, nil
 	}
 	entries, err := s.ftp.List(ctx, dir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var out []ftpclient.Entry
+	var unreadable []string
 	for _, e := range entries {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		}
 		if e.IsDir {
-			sub, err := s.walk(ctx, e.Path, depth+1)
+			sub, subUnreadable, err := s.walk(ctx, e.Path, depth+1)
 			if err != nil {
 				// One unreadable directory should not abort the whole scan.
 				s.log.Warn("skipping unreadable directory", "path", e.Path, "err", err)
+				unreadable = append(unreadable, e.Path)
 				continue
 			}
 			out = append(out, sub...)
+			unreadable = append(unreadable, subUnreadable...)
 			continue
 		}
 		if !isVideoFile(e.Name) || e.Size < minFileBytes {
@@ -384,7 +417,7 @@ func (s *Scanner) walk(ctx context.Context, dir string, depth int) ([]ftpclient.
 		out = append(out, e)
 		s.update(func(st *State) { st.Found = len(out) })
 	}
-	return out, nil
+	return out, unreadable, nil
 }
 
 func isVideoFile(name string) bool {
