@@ -201,6 +201,18 @@ Then create the account at `http://localhost:8080`, or from the CLI with
    folder and file names.
 3. Pick a title, choose quality, audio track and subtitles, and press play.
 
+Use **Analyser** after adding or deleting files on the Freebox. It synchronises
+the index and removes folders that no longer contain indexed media. Requested
+scans take priority over the remaining probe backlog once the current file is
+finished. An inaccessible directory is preserved and reported in **État du
+serveur**; a missing library root is cleared only when its parent can be listed
+and confirms its absence. The configured library itself remains in settings
+until you remove it.
+
+**Réassocier les métadonnées** only recalculates automatic titles from already
+indexed names. It does not contact FTP, remove deleted files, or regenerate
+posters. Titles edited by hand are preserved.
+
 Progress is saved every 10 seconds and offered as a resume point on the detail
 page. Keyboard shortcuts in the player: space, ←/→ for 10s, `F` fullscreen,
 `M` mute.

@@ -30,6 +30,7 @@
         </p>
       {{end}}
       {{if .LastError}}<div class="alert alert-error">{{.LastError}}</div>{{end}}
+      {{if gt .PendingJobs 0}}<p class="hint">{{.PendingJobs}} demande(s) en attente.</p>{{end}}
     {{end}}
     {{if gt $s.Retryable 0}}
     <p class="hint">{{$s.Retryable}} fichier(s) en échec temporaire, réessai programmé.</p>

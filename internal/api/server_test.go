@@ -1594,3 +1594,35 @@ func TestEmptyTitleIsRejected(t *testing.T) {
 		t.Error("the previous title was clobbered by an invalid submission")
 	}
 }
+
+func TestFolderGridPollsForNestedPendingMedia(t *testing.T) {
+	env := newEnv(t)
+	env.signUp(t)
+	ctx := context.Background()
+	lib, err := env.store.CreateLibrary(ctx, "/Films", "Films", db.KindMovie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _, err := env.store.UpsertMediaFile(ctx, lib.ID, "/Films/Nested/movie.mkv", 1<<30, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gridURL := fmt.Sprintf("/ui/media?library_id=%d", lib.ID)
+	page := body(t, env.get(t, gridURL))
+	if !strings.Contains(page, `hx-trigger="every 10s"`) {
+		t.Fatal("folder view does not poll for nested pending files")
+	}
+	if err := env.store.SetMediaStatus(ctx, id, db.StatusReady, ""); err != nil {
+		t.Fatal(err)
+	}
+	page = body(t, env.get(t, gridURL))
+	if strings.Contains(page, `hx-trigger="every 10s"`) {
+		t.Fatal("settled view still polls")
+	}
+	resp := env.postForm(t, fmt.Sprintf("/ui/libraries/%d/scan", lib.ID), url.Values{})
+	resp.Body.Close()
+	page = body(t, env.get(t, gridURL))
+	if !strings.Contains(page, `hx-trigger="every 10s"`) {
+		t.Fatal("folder view does not poll for queued scan")
+	}
+}

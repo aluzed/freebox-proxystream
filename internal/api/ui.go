@@ -471,10 +471,16 @@ func looksLikeEpisodes(files []db.Media) bool {
 	return numbered*4 >= len(files)*3
 }
 
-// gridData adds the self-refresh wiring. The grid only polls while something on
-// it is still being probed, so a settled library costs nothing.
+// gridData keeps folder views fresh too: their pending media are below the
+// current level, so inspecting Files alone misses scans and deletions.
 func (s *Server) gridData(r *http.Request, data map[string]any) map[string]any {
-	pending := false
+	st := s.scanner.State()
+	pending := st.Running || st.PendingJobs > 0
+	if !pending {
+		if n, err := s.store.CountPendingProbes(r.Context()); err == nil {
+			pending = n > 0
+		}
+	}
 	if files, ok := data["Files"].([]db.Media); ok {
 		for _, m := range files {
 			if m.Status == db.StatusNew || m.Status == db.StatusProbing {
@@ -814,7 +820,7 @@ func (s *Server) fragScanLibrary(w http.ResponseWriter, r *http.Request) {
 		if err := s.scanner.EnqueueScan(id); err != nil {
 			data["Level"], data["Message"] = "error", err.Error()
 		} else {
-			data["Level"], data["Message"] = "success", "Analyse lancée."
+			data["Level"], data["Message"] = "success", "Analyse mise en file : les fichiers et dossiers disparus seront retirés. Suivi dans État du serveur."
 		}
 	}
 	s.renderFragment(w, r, "status", data)
@@ -838,7 +844,7 @@ func (s *Server) fragRefreshLibrary(w http.ResponseWriter, r *http.Request) {
 			data["Level"], data["Message"] = "error", err.Error()
 		} else {
 			data["Level"], data["Message"] = "success",
-				"Réassociation des métadonnées lancée : aucun fichier ne sera relu sur le FTP."
+				"Réassociation des métadonnées mise en file. Pour retirer les fichiers et dossiers disparus, utilisez Analyser."
 		}
 	}
 	s.renderFragment(w, r, "status", data)

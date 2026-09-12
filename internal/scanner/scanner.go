@@ -69,6 +69,7 @@ type State struct {
 	Probed      int       `json:"probed"`
 	ToProbe     int       `json:"to_probe"`
 	Queued      int       `json:"queued"`
+	PendingJobs int       `json:"pending_jobs"`
 	CurrentFile string    `json:"current_file,omitempty"`
 	StartedAt   time.Time `json:"started_at,omitempty"`
 	LastError   string    `json:"last_error,omitempty"`
@@ -77,7 +78,7 @@ type State struct {
 type Scanner struct {
 	cfg    *config.Config
 	store  *db.Store
-	ftp    *ftpclient.Client
+	ftp    directoryLister
 	thumbs *thumbnail.Generator
 	log    *slog.Logger
 
@@ -85,6 +86,10 @@ type Scanner struct {
 
 	mu    sync.Mutex
 	state State
+}
+
+type directoryLister interface {
+	List(context.Context, string) ([]ftpclient.Entry, error)
 }
 
 func New(cfg *config.Config, store *db.Store, ftp *ftpclient.Client,
@@ -103,6 +108,7 @@ func (s *Scanner) State() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.state
+	st.PendingJobs = len(s.jobs)
 	// Derived, never accumulated. A total kept as its own counter goes wrong
 	// the moment work outlives the walk that queued it: a restart requeues
 	// pending probes without re-walking, and a second scan used to reset the
@@ -216,7 +222,9 @@ func (s *Scanner) markIdle() {
 // cannot spin the worker.
 func (s *Scanner) drainPending(ctx context.Context) {
 	for {
-		if ctx.Err() != nil {
+		// A requested rescan can remove stale rows from this very backlog.
+		// Service it before starting another potentially slow remote probe.
+		if ctx.Err() != nil || len(s.jobs) > 0 {
 			return
 		}
 		remaining, err := s.store.CountPendingProbes(ctx)
@@ -236,7 +244,7 @@ func (s *Scanner) drainPending(ctx context.Context) {
 		s.update(func(st *State) { st.Running = true })
 
 		for _, id := range ids {
-			if ctx.Err() != nil {
+			if ctx.Err() != nil || len(s.jobs) > 0 {
 				return
 			}
 			if err := s.probeOne(ctx, id); err != nil && ctx.Err() == nil {
@@ -277,7 +285,12 @@ func (s *Scanner) scanLibrary(ctx context.Context, libraryID int64) error {
 
 	files, unreadable, err := s.walk(ctx, lib.FTPPath, 0)
 	if err != nil {
-		return fmt.Errorf("walk %s: %w", lib.FTPPath, err)
+		// FTP 550 also means permission denied. Only a successful listing
+		// of the parent can confirm that this source was actually removed.
+		if ctx.Err() != nil || !s.directoryMissing(ctx, lib.FTPPath) {
+			return fmt.Errorf("walk %s: %w", lib.FTPPath, err)
+		}
+		s.log.Info("library directory no longer exists", "path", lib.FTPPath)
 	}
 
 	s.update(func(st *State) { st.Phase = "indexing"; st.Found = len(files) })
@@ -289,15 +302,13 @@ func (s *Scanner) scanLibrary(ctx context.Context, libraryID int64) error {
 			return ctx.Err()
 		}
 		seen = append(seen, f.Path)
-		mediaID, needsProbe, err := s.store.UpsertMediaFile(ctx, lib.ID, f.Path, f.Size, f.Mtime)
+		_, needsProbe, err := s.store.UpsertMediaFile(ctx, lib.ID, f.Path, f.Size, f.Mtime)
 		if err != nil {
-			s.log.Warn("upsert media failed", "path", f.Path, "err", err)
-			continue
+			return fmt.Errorf("index %s: %w", f.Path, err)
 		}
 		if needsProbe {
 			newCount++
 		}
-		_ = mediaID
 	}
 
 	if len(unreadable) > 0 {
@@ -306,19 +317,40 @@ func (s *Scanner) scanLibrary(ctx context.Context, libraryID int64) error {
 	}
 	removed, err := s.store.DeleteMissing(ctx, lib.ID, seen, unreadable)
 	if err != nil {
-		s.log.Warn("removing deleted files failed", "library_id", lib.ID, "err", err)
+		return fmt.Errorf("remove missing media: %w", err)
 	}
 	for _, id := range removed {
 		s.dropDerived(id)
 	}
+	if len(unreadable) > 0 {
+		return fmt.Errorf("analyse incomplète : %d dossier(s) non parcouru(s), contenu conservé (premier : %s)",
+			len(unreadable), unreadable[0])
+	}
 
 	if err := s.store.TouchLibraryScan(ctx, lib.ID); err != nil {
-		s.log.Warn("could not record scan time", "library_id", lib.ID, "err", err)
+		return fmt.Errorf("record scan time: %w", err)
 	}
 
 	s.log.Info("library scan finished",
 		"library_id", lib.ID, "files", len(files), "to_probe", newCount, "removed", len(removed))
 	return nil
+}
+
+func (s *Scanner) directoryMissing(ctx context.Context, dir string) bool {
+	dir = ftpclient.NormalizePath(dir)
+	if dir == "/" {
+		return false
+	}
+	entries, err := s.ftp.List(ctx, path.Dir(dir))
+	if err != nil || ctx.Err() != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.Path == dir {
+			return false
+		}
+	}
+	return true
 }
 
 // dropDerived deletes what was generated from a file that no longer exists.
