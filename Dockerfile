@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/proxystream ./cmd/proxystream
 
-FROM alpine:3.21
+FROM alpine:3.22
 
 RUN apk add --no-cache ffmpeg ca-certificates tzdata \
  && adduser -D -u 1000 -h /app proxystream
